@@ -83,6 +83,7 @@ class BaseProcgenEnv(CEnv):
         num_threads=4,
         render_mode=None,
         vision_mode=None,
+        stochasticity=None,
     ):
         if resource_root is None:
             resource_root = os.path.join(SCRIPT_DIR, "data", "assets") + os.sep
@@ -120,6 +121,7 @@ class BaseProcgenEnv(CEnv):
                 "num_threads": num_threads,
                 "render_human": render_human,
                 "vision_mode": vision_mode,
+                "stochasticity": stochasticity,
                 # these will only be used the first time an environment is created in a process
                 "resource_root": resource_root,
             }
@@ -218,6 +220,7 @@ class ProcgenGym3Env(BaseProcgenEnv):
         paint_vel_info=False,
         distribution_mode="hard",
         vision_mode="normal",
+        stochasticity=1,
         **kwargs,
     ):
         assert (
@@ -248,6 +251,7 @@ class ProcgenGym3Env(BaseProcgenEnv):
             }
 
         kwargs["vision_mode"] = vision_mode
+        kwargs["stochasticity"] = stochasticity
 
         super().__init__(num, env_name, options, **kwargs)
 

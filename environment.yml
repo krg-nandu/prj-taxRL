@@ -9,6 +9,7 @@ dependencies:
   - qt=5.12.5  # conda-forge does not have 5.13.2 available
   - mpi4py=3.0.3
   - cudatoolkit=10.0
+  - ipython
   - pip
   - pip:
     - gym3==0.3.3

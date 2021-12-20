@@ -71,6 +71,8 @@ void Game::parse_options(std::string name, VecOptions opts) {
     opts.consume_int("debug_mode", &options.debug_mode);
     opts.consume_int("game_type", &game_type);
 
+    opts.consume_float("stochasticity", &options.stochasticity);
+
     opts.consume_string("vision_mode", &options.vision_mode);
     semantic_mask = options.vision_mode == "semantic_mask";
     fg_mask = options.vision_mode == "fg_mask";

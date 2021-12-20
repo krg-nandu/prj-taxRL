@@ -11,6 +11,7 @@ There is no error if an option is missing, the passed value is not changed in th
 #include "libenv.h"
 #include <string>
 #include <vector>
+#include <cmath>
 
 class VecOptions {
   public:
@@ -18,6 +19,7 @@ class VecOptions {
     void consume_string(std::string name, std::string *value);
     void consume_int(std::string name, int32_t *value);
     void consume_bool(std::string name, bool *value);
+    void consume_float(std::string name, float_t *value);
     void ensure_empty();
 
   private:

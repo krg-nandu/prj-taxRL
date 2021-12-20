@@ -59,6 +59,7 @@ struct GameOptions {
     int physics_mode = 0;
 
     std::string vision_mode;
+    float stochasticity;
 };
 
 class Game {
