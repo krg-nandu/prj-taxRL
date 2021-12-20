@@ -2,7 +2,7 @@
 #torch.cuda.current_device()
 
 import os, argparse, sys
-sys.path.insert(0, '../baselines')
+sys.path.insert(0, './train-procgen/')
 import tensorflow as tf
 from baselines.ppo2 import ppo2
 #from baselines.ppo2 import ppo2_custom as ppo2
@@ -19,7 +19,7 @@ from baselines.common.vec_env import (
 from baselines import logger
 from mpi4py import MPI
 
-sys.path.insert(1, '../../procgen')
+sys.path.insert(1, './')
 from procgen import ProcgenEnv
 
 #from models.unet_model import UNet
@@ -50,7 +50,8 @@ def train_fn(
         save_recon_gif = False, 
         exp_name='testgif', 
         use_decoder=None, 
-        stochasticity=None):
+        stochasticity=None,
+        vision_mode=None):
 
     learning_rate = 5e-4
     ent_coef = .01
@@ -77,7 +78,8 @@ def train_fn(
         num_levels=num_levels, 
         start_level=start_level,
         distribution_mode=distribution_mode,
-        stochasticity=stochasticity
+        stochasticity=stochasticity,
+        vision_mode=vision_mode
     )
 
     eval_venv = ProcgenEnv(
@@ -86,7 +88,8 @@ def train_fn(
             num_levels=0, 
             start_level=start_level,
             distribution_mode=distribution_mode,
-            stochasticity=stochasticity
+            stochasticity=stochasticity,
+            vision_mode=vision_mode
     )
 
     venv = VecExtractDictObs(venv, "rgb")
@@ -178,6 +181,9 @@ def main():
     parser.add_argument('--num_episodes', type=int, default=0)
     parser.add_argument('--test_eval', type=bool, default=False)
 
+    ## VISUAL REP
+    parser.add_argument('--vision_mode', type=str, default='normal', choices=["normal", "semantic_mask", "fg_mask"], required=True)
+
     ## STOCHASTIC REWARDS
     parser.add_argument('--stochasticity', type=float, default=1.)
 
@@ -241,7 +247,8 @@ def main():
         save_recon_gif = args.save_recon_gif,
         exp_name = args.gif_name,
         use_decoder = args.use_decoder,
-        stochasticity = args.stochasticity
+        stochasticity = args.stochasticity,
+        vision_mode = args.vision_mode
     )
 
 if __name__ == '__main__':
