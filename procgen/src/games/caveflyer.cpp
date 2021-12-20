@@ -87,7 +87,9 @@ class CaveFlyerGame : public BasicAbstractGame {
         BasicAbstractGame::handle_agent_collision(obj);
 
         if (obj->type == GOAL) {
-            step_data.reward += GOAL_REWARD;
+	    if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += GOAL_REWARD * (1./options.stochasticity);
+	    }
             step_data.level_complete = true;
             step_data.done = true;
         } else if (obj->type == OBSTACLE) {
@@ -132,7 +134,9 @@ class CaveFlyerGame : public BasicAbstractGame {
                 if (src->health <= 0 && !src->will_erase) {
                     spawn_child(src, EXPLOSION, .5 * src->rx);
                     src->will_erase = true;
-                    step_data.reward += TARGET_REWARD;
+		    if (rand_gen.rand01() <= options.stochasticity) {
+                    	step_data.reward += TARGET_REWARD * (1./options.stochasticity);
+		    }
                 }
             } else if (src->type == OBSTACLE) {
                 erase_bullet = true;

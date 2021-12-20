@@ -177,11 +177,15 @@ class BossfightGame : public BasicAbstractGame {
                     will_erase = true;
 
                     if (int(target->health) % round_health == 0) {
-                        step_data.reward += POSITIVE_REWARD;
+			if (rand_gen.rand01() <= options.stochasticity) {
+    			    step_data.reward += POSITIVE_REWARD * (1./options.stochasticity);
+			}
 
                         if (target->health == 0) {
                             step_data.done = true;
-                            step_data.reward += COMPLETION_BONUS;
+	    		    if (rand_gen.rand01() <= options.stochasticity) {
+                                step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+			    }
                             step_data.level_complete = true;
                         } else {
                             round_num++;

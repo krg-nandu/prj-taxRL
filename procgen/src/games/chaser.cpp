@@ -161,7 +161,9 @@ class ChaserGame : public BasicAbstractGame {
 
         if (obj->type == LARGE_ORB) {
             eat_time = cur_time;
-            step_data.reward += ORB_REWARD;
+	    if (rand_gen.rand01() <= options.stochasticity) { 
+            	step_data.reward += ORB_REWARD * (1./options.stochasticity);
+	    }
             obj->will_erase = true;
         } else if (obj->type == ENEMY) {
             if (can_eat_enemies()) {
@@ -415,12 +417,16 @@ class ChaserGame : public BasicAbstractGame {
 
         if (get_obj(agent_idx) == ORB) {
             set_obj(agent_idx, SPACE);
-            step_data.reward += ORB_REWARD;
+	    if (rand_gen.rand01() <= options.stochasticity) { 
+            step_data.reward += ORB_REWARD * (1./options.stochasticity);
+	    }
             orbs_collected += 1;
         }
 
         if (orbs_collected == total_orbs) {
-            step_data.reward += COMPLETION_BONUS;
+	    if (rand_gen.rand01() <= options.stochasticity) { 
+            step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+	    }
             step_data.level_complete = true;
             step_data.done = true;
         }
