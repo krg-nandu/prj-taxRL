@@ -2,7 +2,6 @@ import tensorflow as tf
 import argparse, os, sys
 sys.path.insert(0, './train-procgen/')
 
-import ipdb; ipdb.set_trace()
 from baselines.common.models import build_impala_cnn, build_conv_ae
 import procgen
 from procgen import ProcgenEnv
@@ -146,7 +145,7 @@ if __name__ == "__main__":
         print('The input experiment location \'{}\' is not a directory.'.format(experiment_dir))
         os._exit(0)
 
-    filepath = os.path.join(experiment_dir, 'eval.csv')
+    filepath = os.path.join(experiment_dir, 'eval_test.csv')
     models_dir = os.path.join(experiment_dir, 'checkpoints')
 
     open(filepath, 'w').close() # clear the file

@@ -1,5 +1,6 @@
 channels:
   - conda-forge
+  - anaconda
 
 dependencies:
   - python=3.7.3
@@ -7,6 +8,7 @@ dependencies:
   - cmake=3.14.0
   - qt=5.12.5  # conda-forge does not have 5.13.2 available
   - mpi4py=3.0.3
+  - cudatoolkit=10.0
   - pip
   - pip:
     - gym3==0.3.3
@@ -17,3 +19,4 @@ dependencies:
     - pytest # for baselines
     - joblib
     - ipdb
+    - matplotlib

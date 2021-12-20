@@ -1,4 +1,4 @@
-import torch
+#import torch
 import numpy as np
 from baselines.common.runners import AbstractEnvRunner
 import matplotlib.pyplot as plt
