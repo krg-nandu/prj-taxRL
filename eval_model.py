@@ -1,4 +1,8 @@
 import tensorflow as tf
+import argparse, os, sys
+sys.path.insert(0, './train-procgen/')
+
+import ipdb; ipdb.set_trace()
 from baselines.common.models import build_impala_cnn, build_conv_ae
 import procgen
 from procgen import ProcgenEnv
@@ -10,7 +14,6 @@ from baselines.common.vec_env import (
 from baselines.common.policies import build_policy
 from baselines.ppo2.runner import Runner
 import numpy as np
-import argparse, os
 from pathlib import Path
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'

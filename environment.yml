@@ -16,3 +16,4 @@ dependencies:
     - tensorflow==1.15.0
     - pytest # for baselines
     - joblib
+    - ipdb

@@ -15,7 +15,7 @@ class PolicyWithValue(object):
     Encapsulates fields and methods for RL policy and value function estimation with shared parameters
     """
 
-    def __init__(self, env, observations, latent, estimate_q=False, vf_latent=None, sess=None, **tensors):
+    def __init__(self, env, observations, latent, recon, estimate_q=False, vf_latent=None, sess=None, **tensors):
         """
         Parameters:
         ----------
@@ -32,8 +32,15 @@ class PolicyWithValue(object):
         **tensors       tensorflow tensors for additional attributes such as state or mask
 
         """
+        # add recon which is the reconstruction!!~~
 
         self.X = observations
+        self.recon = recon
+        if type(recon) == type(None):
+            self.use_decoder = False
+        else:
+            self.use_decoder = True
+
         self.state = tf.constant([])
         self.initial_state = None
         self.__dict__.update(tensors)
@@ -54,6 +61,10 @@ class PolicyWithValue(object):
         # Calculate the neg log of our probability
         self.neglogp = self.pd.neglogp(self.action)
         self.sess = sess or tf.get_default_session()
+
+        if type(self.recon) != type(None):
+            # Calculate the reconstruction loss
+            self.rloss = tf.reduce_mean(tf.squared_difference(self.recon, tf.cast(self.X, tf.float32)/255.)) 
 
         if estimate_q:
             assert isinstance(env.action_space, gym.spaces.Discrete)
@@ -90,10 +101,15 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
+        if self.use_decoder:
+            a, v, state, neglogp, rloss, recon = self._evaluate([self.action, self.vf, self.state, self.neglogp, self.rloss, self.recon], observation, **extra_feed)
+        else:
+            a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
+            rloss, recon = None, None
+
         if state.size == 0:
             state = None
-        return a, v, state, neglogp
+        return a, v, state, neglogp, rloss, recon
 
     def value(self, ob, *args, **kwargs):
         """
@@ -118,7 +134,7 @@ class PolicyWithValue(object):
     def load(self, load_path):
         tf_util.load_state(load_path, sess=self.sess)
 
-def build_policy(env, policy_network, value_network=None,  normalize_observations=False, estimate_q=False, **policy_kwargs):
+def build_policy(env, policy_network, value_network=None,  normalize_observations=False, estimate_q=False, use_decoder=False, **policy_kwargs):
     if isinstance(policy_network, str):
         network_type = policy_network
         policy_network = get_network_builder(network_type)(**policy_kwargs)
@@ -139,7 +155,13 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
         encoded_x = encode_observation(ob_space, encoded_x)
 
         with tf.variable_scope('pi', reuse=tf.AUTO_REUSE):
-            policy_latent = policy_network(encoded_x)
+            if use_decoder:
+                # Also getting the decoded layer here
+                policy_latent, obs_recon = policy_network(encoded_x)
+            else:
+                policy_latent = policy_network(encoded_x)
+                obs_recon = None
+
             if isinstance(policy_latent, tuple):
                 policy_latent, recurrent_tensors = policy_latent
 
@@ -169,6 +191,7 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
             env=env,
             observations=X,
             latent=policy_latent,
+            recon = obs_recon,
             vf_latent=vf_latent,
             sess=sess,
             estimate_q=estimate_q,

@@ -25,8 +25,9 @@ class Model(object):
     - Save load the model
     """
     def __init__(self, *, policy, ob_space, ac_space, nbatch_act, nbatch_train,
-                nsteps, ent_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None):
+                nsteps, ent_coef, vf_coef, max_grad_norm, mpi_rank_weight=1, comm=None, microbatch_size=None, use_decoder=False, ae_coeff = 0.):
         self.sess = sess = get_session()
+        self.use_decoder = use_decoder
 
         if MPI is not None and comm is None:
             comm = MPI.COMM_WORLD
@@ -46,6 +47,7 @@ class Model(object):
         self.A = A = train_model.pdtype.sample_placeholder([None])
         self.ADV = ADV = tf.placeholder(tf.float32, [None])
         self.R = R = tf.placeholder(tf.float32, [None])
+
         # Keep track of old actor
         self.OLDNEGLOGPAC = OLDNEGLOGPAC = tf.placeholder(tf.float32, [None])
         # Keep track of old critic
@@ -87,8 +89,12 @@ class Model(object):
         approxkl = .5 * tf.reduce_mean(tf.square(neglogpac - OLDNEGLOGPAC))
         clipfrac = tf.reduce_mean(tf.to_float(tf.greater(tf.abs(ratio - 1.0), CLIPRANGE)))
 
-        # Total loss
-        loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
+        if use_decoder:
+            rec_loss = 1. * train_model.rloss
+            # Total loss
+            loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef + ae_coeff * rec_loss
+        else:
+            loss = pg_loss - entropy * ent_coef + vf_loss * vf_coef
 
         # UPDATE THE PARAMETERS USING LOSS
         # 1. Get the model parameters
@@ -114,7 +120,10 @@ class Model(object):
         self._train_op = self.trainer.apply_gradients(grads_and_var)
         self.loss_names = ['policy_loss', 'value_loss', 'policy_entropy', 'approxkl', 'clipfrac']
         self.stats_list = [pg_loss, vf_loss, entropy, approxkl, clipfrac]
-
+       
+        if use_decoder:
+            self.loss_names.append('recon_loss')
+            self.stats_list.append(rec_loss)
 
         self.train_model = train_model
         self.act_model = act_model

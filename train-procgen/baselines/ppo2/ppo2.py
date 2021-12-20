@@ -1,4 +1,4 @@
-import os, sys
+import os
 import time
 import numpy as np
 import os.path as osp
@@ -11,9 +11,7 @@ try:
 except ImportError:
     MPI = None
 from baselines.ppo2.runner import Runner
-from PIL import Image
-sys.path.insert(2, '..')
-from gameplay_sampler import sample_gameplay
+
 
 def constfn(val):
     def f(_):
@@ -23,8 +21,7 @@ def constfn(val):
 def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2048, ent_coef=0.0, lr=3e-4,
             vf_coef=0.5,  max_grad_norm=0.5, gamma=0.99, lam=0.95,
             log_interval=10, nminibatches=4, noptepochs=4, cliprange=0.2,
-            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None,
-            env_name=None, experiment_name=None, num_levels=0, num_episodes=0, distribution_mode='hard', vision_mode='normal', **network_kwargs):
+            save_interval=0, load_path=None, model_fn=None, update_fn=None, init_fn=None, mpi_rank_weight=1, comm=None, seg_net=None, ae_coeff=0., save_recon_gif=False, exp_name='testgif', **network_kwargs):
     '''
     Learn policy using PPO algorithm (https://arxiv.org/abs/1707.06347)
 
@@ -109,12 +106,13 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
 
     model = model_fn(policy=policy, ob_space=ob_space, ac_space=ac_space, nbatch_act=nenvs, nbatch_train=nbatch_train,
                     nsteps=nsteps, ent_coef=ent_coef, vf_coef=vf_coef,
-                    max_grad_norm=max_grad_norm, comm=comm, mpi_rank_weight=mpi_rank_weight)
+                    max_grad_norm=max_grad_norm, comm=comm, mpi_rank_weight=mpi_rank_weight, ae_coeff=ae_coeff)
 
     if load_path is not None:
         model.load(load_path)
+
     # Instantiate the runner object
-    runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+    runner = Runner(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam, seg_net = seg_net)
     if eval_env is not None:
         eval_runner = Runner(env = eval_env, model = model, nsteps = nsteps, gamma = gamma, lam= lam)
 
@@ -142,7 +140,7 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if update % log_interval == 0 and is_mpi_root: logger.info('Stepping environment...')
 
         # Get minibatch
-        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run() #pylint: disable=E0632
+        obs, returns, masks, actions, values, neglogpacs, states, epinfos = runner.run(save_recon_gif=save_recon_gif, exp_name=exp_name) #pylint: disable=E0632
         if eval_env is not None:
             eval_obs, eval_returns, eval_masks, eval_actions, eval_values, eval_neglogpacs, eval_states, eval_epinfos = eval_runner.run() #pylint: disable=E0632
 
@@ -201,14 +199,11 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
             logger.logkv("misc/total_timesteps", update*nbatch)
             logger.logkv("fps", fps)
             logger.logkv("misc/explained_variance", float(ev))
-            logger.logkv('epnormrewmean', safemean([epinfo['nr'] for epinfo in epinfobuf]))
             logger.logkv('eprewmean', safemean([epinfo['r'] for epinfo in epinfobuf]))
             logger.logkv('eplenmean', safemean([epinfo['l'] for epinfo in epinfobuf]))
             if eval_env is not None:
-                logger.logkv('eval_epnormrewmean', safemean([epinfo['nr'] for epinfo in eval_epinfobuf]) )
                 logger.logkv('eval_eprewmean', safemean([epinfo['r'] for epinfo in eval_epinfobuf]) )
                 logger.logkv('eval_eplenmean', safemean([epinfo['l'] for epinfo in eval_epinfobuf]) )
-            logger.logkv('misc/lrnow', lrnow)
             logger.logkv('misc/time_elapsed', tnow - tfirststart)
             for (lossval, lossname) in zip(lossvals, model.loss_names):
                 logger.logkv('loss/' + lossname, lossval)
@@ -217,15 +212,9 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
         if save_interval and (update % save_interval == 0 or update == 1) and logger.get_dir() and is_mpi_root:
             checkdir = osp.join(logger.get_dir(), 'checkpoints')
             os.makedirs(checkdir, exist_ok=True)
-            model_path = osp.join(checkdir, '%.5i'%update)
-            print('Saving to', model_path)
-            model.save(model_path)
-
-            save_dir = '{}/gameplay_samples/checkpoint-{}'.format(logger.get_dir(), '%.5i'%update)
-            if num_episodes != 0:
-                sample_gameplay(env_name, save_dir, num_levels, num_episodes, distribution_mode, vision_mode, model_path)   # train
-                if num_levels != 0:
-                    sample_gameplay(env_name, save_dir, 0, num_episodes, distribution_mode, vision_mode, model_path)        # test (num_levels=0)
+            savepath = osp.join(checkdir, '%.5i'%update)
+            print('Saving to', savepath)
+            model.save(savepath)
 
     return model
 # Avoid division error when calculate the mean (in our case if epinfo is empty returns np.nan, not return an error)

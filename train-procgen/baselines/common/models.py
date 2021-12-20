@@ -70,6 +70,67 @@ def build_impala_cnn(unscaled_images, depths=[16,32,32], **conv_kwargs):
 
     return out
 
+def build_conv_ae(unscaled_images, bottleneck_dim=256, depths=[16,32,32], **conv_kwargs):
+    layer_num = 0
+
+    def get_layer_num_str():
+        nonlocal layer_num
+        num_str = str(layer_num)
+        layer_num += 1
+        return num_str
+
+    def conv_layer(out, depth):
+        return tf.layers.conv2d(out, depth, 3, padding='same', name='layer_' + get_layer_num_str())
+
+    def residual_block(inputs):
+        depth = inputs.get_shape()[-1].value
+
+        out = tf.nn.relu(inputs)
+
+        out = conv_layer(out, depth)
+        out = tf.nn.relu(out)
+        out = conv_layer(out, depth)
+        return out + inputs
+
+    def conv_sequence(inputs, depth):
+        out = conv_layer(inputs, depth)
+        out = tf.layers.max_pooling2d(out, pool_size=3, strides=2, padding='same')
+        out = residual_block(out)
+        out = residual_block(out)
+        return out
+
+    out = tf.cast(unscaled_images, tf.float32) / 255.
+    for depth in depths:
+        out = conv_sequence(out, depth)
+
+    tensor_shape = out.shape.as_list()
+
+    out = tf.layers.flatten(out)
+    out = tf.nn.relu(out)
+
+    downsamples = [1024, 512]
+
+    for val in downsamples:
+        out = tf.layers.dense(out, val, activation=tf.nn.relu, name='layer_' + get_layer_num_str())
+
+    # here is where we introduce the bottleneck dim
+    out = tf.layers.dense(out, bottleneck_dim, activation=tf.nn.relu, name='layer_' + get_layer_num_str())
+
+    # upsample
+    rec = tf.layers.dense(out, downsamples[-1], activation=tf.nn.relu, name='layer_' + get_layer_num_str())
+    rec = tf.layers.dense(rec, downsamples[-2], activation=tf.nn.relu, name='layer_' + get_layer_num_str())
+
+    rec = tf.layers.dense(rec, np.prod(tensor_shape[1:]), activation=tf.nn.relu, name='uplayer1')
+    rec = tf.reshape(rec, tensor_shape)
+
+    for depth in depths[1::-1]+[3]:
+        rec = tf.layers.conv2d_transpose(rec, depth, 3, strides=2, padding='same', name='layer_' + get_layer_num_str())
+        rec = tf.nn.relu(rec)
+
+    # sigmoid to make it [0,1]
+    rec = tf.nn.sigmoid(rec, name='final_recon')
+    return (out, rec)
+
 
 @register("mlp")
 def mlp(num_layers=2, num_hidden=64, activation=tf.tanh, layer_norm=False):
