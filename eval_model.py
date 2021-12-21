@@ -71,8 +71,8 @@ class EvalRunner(Runner):
         return np.mean(episode_rewards)
 
 
-def get_eval_env(env_name, num_envs):
-    venv = ProcgenEnv(num_envs=num_envs, env_name=env_name, num_levels=num_levels, distribution_mode=distribution_mode)
+def get_eval_env(env_name, num_envs, vision_mode, stochasticity):
+    venv = ProcgenEnv(num_envs=num_envs, env_name=env_name, num_levels=num_levels, distribution_mode=distribution_mode, vision_mode=vision_mode, stochasticity=stochasticity)
     venv = VecExtractDictObs(venv, "rgb")
     venv = VecMonitor(venv=venv, filename=None, keep_buf=100)
     venv = VecNormalize(venv=venv, ob=False)
@@ -80,15 +80,15 @@ def get_eval_env(env_name, num_envs):
     return venv
 
 
-def get_mean_reward(model, env_name, num_envs):
-    env = get_eval_env(env_name, num_envs)
+def get_mean_reward(model, env_name, num_envs, vision_mode=None, stochasticity=None):
+    env = get_eval_env(env_name, num_envs, vision_mode, stochasticity)
     mean_reward = evaluate(eval_env=env, model=model)
 
     return mean_reward
 
 
-def load_model(model_path, env_name, num_envs, use_decoder=False, bottleneck=None):
-    env = get_eval_env(env_name, num_envs)
+def load_model(model_path, env_name, num_envs, vision_mode=None, stochasticity=None, use_decoder=False, bottleneck=None):
+    env = get_eval_env(env_name, num_envs, vision_mode, stochasticity)
 
     if use_decoder:
         conv_fn = lambda x: build_conv_ae(x, bottleneck_dim=bottleneck, depths=[16,32,32], emb_size=256)
@@ -133,6 +133,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--BASE_PATH', type=str, required=True)
     parser.add_argument('--env_name', type=str, required=True)
+    parser.add_argument('--vision_mode', type=str, default='normal', choices=["normal", "semantic_mask", "fg_mask"], required=True)
+    parser.add_argument('--stochasticity', type=float, default=1.)
+
     parser.add_argument('--eval_env_name', type=str)
     parser.add_argument('--experiment_name', type=str, required=True)
     parser.add_argument('--use_decoder', action='store_true')
@@ -145,7 +148,7 @@ if __name__ == "__main__":
         print('The input experiment location \'{}\' is not a directory.'.format(experiment_dir))
         os._exit(0)
 
-    filepath = os.path.join(experiment_dir, 'eval_test.csv')
+    filepath = os.path.join(experiment_dir, 'eval.csv')
     models_dir = os.path.join(experiment_dir, 'checkpoints')
 
     open(filepath, 'w').close() # clear the file
@@ -163,13 +166,13 @@ if __name__ == "__main__":
             file = open(filepath, 'a')
 
             my_env = args.env_name
-            if 'eval_env_name' in args:
+            if args.eval_env_name != None:
                 my_env = args.eval_env_name
             
-            model = load_model(model_checkpoint_path, my_env, num_envs=NUM_ENVS, use_decoder=args.use_decoder, bottleneck=args.bottleneck)
+            model = load_model(model_checkpoint_path, my_env, vision_mode=args.vision_mode, stochasticity=args.stochasticity, num_envs=NUM_ENVS, use_decoder=args.use_decoder, bottleneck=args.bottleneck)
  
             checkpoint_number = int(model_checkpoint)
-            average_reward = get_mean_reward(model, my_env, num_envs=NUM_ENVS)
+            average_reward = get_mean_reward(model, my_env, num_envs=NUM_ENVS, vision_mode=args.vision_mode, stochasticity=args.stochasticity)
 
             file.write('{},{}\n'.format(checkpoint_number, average_reward))
             file.close()
