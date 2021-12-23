@@ -173,7 +173,9 @@ class StarPilotGame : public BasicAbstractGame {
 
         if (obj->type == FINISH_LINE) {
             step_data.done = true;
-            step_data.reward += COMPLETION_BONUS;
+    	    if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
         } else if (is_lethal(obj)) {
             step_data.done = true;
@@ -441,8 +443,9 @@ class StarPilotGame : public BasicAbstractGame {
 
             if (m->health <= 0 && is_destructible(m->type) && !m->will_erase) {
                 spawn_child(m, EXPLOSION, .5 * m->rx, true);
-
-                step_data.reward += ENEMY_REWARD;
+        	    if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += ENEMY_REWARD * (1./options.stochasticity);
+                }
                 m->will_erase = true;
             }
         }

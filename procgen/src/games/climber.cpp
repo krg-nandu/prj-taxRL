@@ -111,7 +111,9 @@ class Climber : public BasicAbstractGame {
         if (obj->type == ENEMY) {
             step_data.done = true;
         } else if (obj->type == COIN) {
-            step_data.reward += COIN_REWARD;
+	        if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += COIN_REWARD * (1./ options.stochasticity);
+            }
             coins_collected += 1;
             obj->will_erase = true;
         }
@@ -333,7 +335,9 @@ class Climber : public BasicAbstractGame {
 
         if (coin_quota == coins_collected) {
             step_data.done = true;
-            step_data.reward += COMPLETION_BONUS;
+    	    if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
         }
     }

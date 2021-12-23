@@ -175,7 +175,9 @@ class CoinRun : public BasicAbstractGame {
     void handle_grid_collision(const std::shared_ptr<Entity> &obj, int type, int i, int j) override {
         if (obj->type == PLAYER) {
             if (type == GOAL) {
-                step_data.reward += GOAL_REWARD;
+    	        if (rand_gen.rand01() <= options.stochasticity) { 
+                    step_data.reward += GOAL_REWARD * (1./options.stochasticity);
+                }
                 step_data.done = true;
                 step_data.level_complete = true;
             } else if (is_lava(type)) {

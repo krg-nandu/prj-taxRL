@@ -150,7 +150,9 @@ class PlunderGame : public BasicAbstractGame {
 
                 if (is_target(target->image_theme)) {
                     targets_hit += 1;
-                    step_data.reward += POSITIVE_REWARD;
+            	    if (rand_gen.rand01() <= options.stochasticity) { 
+                        step_data.reward += POSITIVE_REWARD * (1./options.stochasticity);
+                    }
                     juice_left += 0.1f;
                 } else {
                     juice_left -= 0.1f;
@@ -289,7 +291,9 @@ class PlunderGame : public BasicAbstractGame {
 
         if (targets_hit >= target_quota) {
             step_data.done = true;
-            step_data.reward += COMPLETION_BONUS;
+            if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
         }
 

@@ -140,7 +140,9 @@ class DodgeballGame : public BasicAbstractGame {
         } else if (obj->type == DOOR) {
             if (num_enemies == 0) {
                 step_data.done = true;
-                step_data.reward += COMPLETION_BONUS;
+	            if (rand_gen.rand01() <= options.stochasticity) { 
+                    step_data.reward += COMPLETION_BONUS * (1./options.stochasticity);
+                }
                 step_data.level_complete = true;
             }
         } else if (obj->type == LAVA_WALL) {
@@ -158,7 +160,9 @@ class DodgeballGame : public BasicAbstractGame {
 
                 if (src->health <= 0 && !src->will_erase) {
                     src->will_erase = true;
-                    step_data.reward += ENEMY_REWARD;
+            	    if (rand_gen.rand01() <= options.stochasticity) { 
+                        step_data.reward += ENEMY_REWARD * (1./options.stochasticity);
+                    }
 
                     // nothing with alpha decay when segmenting
                     if (!(options.vision_mode == "semantic_mask" || options.vision_mode == "fg_mask")) {

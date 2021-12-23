@@ -132,11 +132,14 @@ class MazeGame : public BasicAbstractGame {
 
         if (get_obj(ix, iy) == GOAL) {
             set_obj(ix, iy, SPACE);
-            step_data.reward += REWARD;
+            if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += REWARD * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
+            step_data.done = true;
         }
 
-        step_data.done = step_data.reward > 0;
+        //step_data.done = step_data.reward > 0;
     }
 
     void serialize(WriteBuffer *b) override {

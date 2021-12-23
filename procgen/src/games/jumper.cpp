@@ -103,7 +103,9 @@ class Jumper : public BasicAbstractGame {
         BasicAbstractGame::handle_agent_collision(obj);
 
         if (obj->type == GOAL) {
-            step_data.reward += GOAL_REWARD;
+	        if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += GOAL_REWARD * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
             step_data.done = true;
         } else if (obj->type == SPIKE) {

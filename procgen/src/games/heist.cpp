@@ -112,7 +112,9 @@ class HeistGame : public BasicAbstractGame {
 
         if (obj->type == EXIT) {
             step_data.done = true;
-            step_data.reward = COMPLETION_BONUS;
+    	    if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward = COMPLETION_BONUS * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
         } else if (obj->type == KEY) {
             obj->will_erase = true;

@@ -108,7 +108,9 @@ class Ninja : public BasicAbstractGame {
         if (obj->type == EXPLOSION) {
             step_data.done = true;
         } else if (obj->type == GOAL) {
-            step_data.reward += GOAL_REWARD;
+	        if (rand_gen.rand01() <= options.stochasticity) { 
+                step_data.reward += GOAL_REWARD * (1./options.stochasticity);
+            }
             step_data.level_complete = true;
             step_data.done = true;
         }
