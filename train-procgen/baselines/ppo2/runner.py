@@ -58,7 +58,14 @@ class Runner(AbstractEnvRunner):
             self.obs[:], rewards, self.dones, infos = self.env.step(actions)
             for info in infos:
                 maybeepinfo = info.get('episode')
-                if maybeepinfo: epinfos.append(maybeepinfo)
+                if maybeepinfo:
+                    denom = (info.get('max_possible_score') - info.get('min_possible_score'))
+                    if denom == 0:
+                        normalized_reward = 0
+                    else:
+                        normalized_reward = (maybeepinfo['r'] - info.get('min_possible_score')) / denom
+                    maybeepinfo['nr'] = normalized_reward
+                    epinfos.append(maybeepinfo)
             mb_rewards.append(rewards)
 
         #batch of steps to batch of rollouts
