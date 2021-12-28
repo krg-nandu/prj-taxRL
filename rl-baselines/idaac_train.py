@@ -58,7 +58,7 @@ def train(args):
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
     log_file = '-{}-{}-s{}'.format(args.env_name, args.algo, args.seed)
-    logger.configure(dir=args.log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
+    logger.configure(dir=log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
     print("\nLog File: ", log_file)
 
     venv = ProcgenEnv(

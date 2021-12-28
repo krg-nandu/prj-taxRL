@@ -8,3 +8,5 @@ joblib
 ipdb
 matplotlib
 ipython
+higher==0.2
+kornia==0.3.0

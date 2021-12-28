@@ -1,15 +1,16 @@
-import copy
-import os
-import time
-from collections import deque
+import os, sys
+sys.path.insert(0, '../train-procgen/')
+sys.path.insert(0, '../')
 
+import copy, time
+from collections import deque
 import numpy as np
 import torch
 
 from ucb_rl2_meta import algo, utils
 from ucb_rl2_meta.model import Policy, AugCNN
 from ucb_rl2_meta.storage import RolloutStorage
-from test import evaluate
+from drac_test import evaluate
 
 from baselines import logger
 
@@ -40,17 +41,40 @@ def train(args):
     torch.manual_seed(args.seed)
     torch.cuda.manual_seed_all(args.seed)
 
-    log_dir = os.path.expanduser(args.log_dir)
+    #log_dir = os.path.expanduser(args.log_dir)
+    abspath = os.path.abspath(__file__)
+    current_dir_path = os.path.dirname(abspath)
+    log_dir = os.path.join(
+                    current_dir_path,
+                    'results',
+                    args.env_name,
+                    args.experiment_name
+                    )
+
     utils.cleanup_log_dir(log_dir)
 
     torch.set_num_threads(1)
     device = torch.device("cuda:0" if args.cuda else "cpu")
 
-    log_file = '-{}-{}-reproduce-s{}'.format(args.run_name, args.env_name, args.seed)
+    _algo = 'drac'
+    if args.use_ucb:
+        _algo = 'ucb-drac'
+    elif args.use_meta_learning:
+        _algo = 'meta-drac'
+    elif args.use_rl2:
+        _algo = 'rl2-drac'
 
-    venv = ProcgenEnv(num_envs=args.num_processes, env_name=args.env_name, \
-        num_levels=args.num_levels, start_level=args.start_level, \
-        distribution_mode=args.distribution_mode)
+    #log_file = '-{}-{}-reproduce-s{}'.format(args.run_name, args.env_name, args.seed)
+    log_file = '-{}-{}-s{}'.format(args.env_name, _algo, args.seed)
+
+    venv = ProcgenEnv(
+            num_envs=args.num_processes, 
+            env_name=args.env_name,
+            num_levels=args.num_levels, 
+            start_level=args.start_level,
+            distribution_mode=args.distribution_mode,
+            stochasticity=args.stochasticity,
+            vision_mode=args.vision_mode)
     venv = VecExtractDictObs(venv, "rgb")
     venv = VecMonitor(venv=venv, filename=None, keep_buf=100)
     venv = VecNormalize(venv=venv, ob=False)
@@ -170,16 +194,20 @@ def train(args):
             aug_coef=args.aug_coef,
             env_name=args.env_name)
 
-    checkpoint_path = os.path.join(args.save_dir, "agent" + log_file + ".pt")
+    save_dir = os.path.join(
+                log_dir,
+                args.save_dir
+                )
+    checkpoint_path = os.path.join(save_dir, "agent" + log_file + ".pt")
     if os.path.exists(checkpoint_path) and args.preempt:
         checkpoint = torch.load(checkpoint_path)
         agent.actor_critic.load_state_dict(checkpoint['model_state_dict'])
         agent.optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
         init_epoch = checkpoint['epoch'] + 1
-        logger.configure(dir=args.log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file + "-e%s" % init_epoch)
+        logger.configure(dir=log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file + "-e%s" % init_epoch)
     else:
         init_epoch = 0
-        logger.configure(dir=args.log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
+        logger.configure(dir=log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
 
     obs = envs.reset()
     rollouts.obs[0].copy_(obs)
@@ -259,9 +287,9 @@ def train(args):
 
         # Save Model
         if (j > 0 and j % args.save_interval == 0
-                or j == num_updates - 1) and args.save_dir != "":
+                or j == num_updates - 1) and save_dir != "":
             try:
-                os.makedirs(args.save_dir)
+                os.makedirs(save_dir)
             except OSError:
                 pass
             
@@ -269,7 +297,7 @@ def train(args):
                     'epoch': j,
                     'model_state_dict': agent.actor_critic.state_dict(),
                     'optimizer_state_dict': agent.optimizer.state_dict(),
-            }, os.path.join(args.save_dir, "agent" + log_file + ".pt")) 
+            }, os.path.join(save_dir, "agent" + log_file + ".pt")) 
 
 if __name__ == "__main__":
     args = parser.parse_args()

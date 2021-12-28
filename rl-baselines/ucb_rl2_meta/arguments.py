@@ -118,22 +118,6 @@ parser.add_argument(
     default=256,
     help='state embedding dimension')
 
-# Procgen Arguments.
-parser.add_argument(
-    '--distribution_mode',
-    default='easy',
-    help='distribution of envs for procgen')
-parser.add_argument(
-    '--num_levels',
-    type=int,
-    default=200,
-    help='number of Procgen levels to use for training')
-parser.add_argument(
-    '--start_level',
-    type=int,
-    default=0,
-    help='start level id for sampling Procgen levels')
-
 # DrAC Arguments.
 parser.add_argument(
     '--aug_type',
@@ -236,3 +220,40 @@ parser.add_argument(
     type=float,
     default=0.10, 
     help='fraction of the PPO buffer used for test by the meta-learner.')
+
+# Procgen Arguments.
+parser.add_argument(
+    '--distribution_mode',
+    default='hard',
+    help='distribution of envs for procgen')
+parser.add_argument(
+    '--num_levels',
+    type=int,
+    default=500,
+    help='number of Procgen levels to use for training')
+parser.add_argument(
+    '--start_level',
+    type=int,
+    default=0,
+    help='start level id for sampling Procgen levels')
+
+parser.add_argument(
+    '--experiment_name', 
+    type=str, 
+    required=True)
+
+## VISUAL REP
+parser.add_argument(
+    '--vision_mode', 
+    type=str, 
+    default='normal', 
+    choices=["normal", "semantic_mask", "fg_mask"], 
+    required=True)
+
+## STOCHASTIC REWARDS
+parser.add_argument(
+    '--stochasticity', 
+    type=float, 
+    default=1.)
+
+ 
