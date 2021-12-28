@@ -112,3 +112,5 @@ train-procgen/train_procgen/results*/
 *.png
 *.gif
 *.mp4
+
+*.csv

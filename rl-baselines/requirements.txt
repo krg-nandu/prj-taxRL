@@ -1,0 +1,10 @@
+torch==1.5.0
+tensorflow-gpu==2.1
+gym3==0.3.3
+gym==0.15.4
+filelock==3.0.10
+pytest
+joblib
+ipdb
+matplotlib
+ipython

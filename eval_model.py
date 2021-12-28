@@ -140,6 +140,8 @@ if __name__ == "__main__":
     parser.add_argument('--experiment_name', type=str, required=True)
     parser.add_argument('--use_decoder', action='store_true')
     parser.add_argument('--bottleneck', type=int, default=0)
+    parser.add_argument('--output', type=str, required=True)
+ 
     args = parser.parse_args()
 
     BASE_PATH = args.BASE_PATH
@@ -148,7 +150,7 @@ if __name__ == "__main__":
         print('The input experiment location \'{}\' is not a directory.'.format(experiment_dir))
         os._exit(0)
 
-    filepath = os.path.join(experiment_dir, 'eval.csv')
+    filepath = os.path.join(experiment_dir, '{}.csv'.format(args.output))
     models_dir = os.path.join(experiment_dir, 'checkpoints')
 
     open(filepath, 'w').close() # clear the file
