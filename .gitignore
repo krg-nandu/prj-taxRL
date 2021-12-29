@@ -115,3 +115,7 @@ train-procgen/train_procgen/results*/
 
 *.csv
 **results**
+*.swo
+*.swp
+*.pt
+*.pth
