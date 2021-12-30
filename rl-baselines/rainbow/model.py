@@ -53,10 +53,12 @@ class DQN(nn.Module):
     self.action_space = action_space
 
     if args.architecture == 'canonical':
-      self.convs = nn.Sequential(nn.Conv2d(args.history_length, 32, 8, stride=4, padding=0), nn.ReLU(),
+      self.convs = nn.Sequential(nn.Conv2d(args.n_channels, 32, 4, stride=2, padding=0), nn.ReLU(),
                                  nn.Conv2d(32, 64, 4, stride=2, padding=0), nn.ReLU(),
-                                 nn.Conv2d(64, 64, 3, stride=1, padding=0), nn.ReLU())
-      self.conv_output_size = 3136
+                                 nn.Conv2d(64, 64, 3, stride=2, padding=0), nn.ReLU())
+      # need to find a way to not harcode this!
+      self.conv_output_size = 64 * 6 * 6
+
     elif args.architecture == 'data-efficient':
       self.convs = nn.Sequential(nn.Conv2d(args.history_length, 32, 5, stride=5, padding=0), nn.ReLU(),
                                  nn.Conv2d(32, 64, 5, stride=5, padding=0), nn.ReLU())

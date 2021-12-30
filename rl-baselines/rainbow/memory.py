@@ -3,9 +3,8 @@ from __future__ import division
 import numpy as np
 import torch
 
-
-Transition_dtype = np.dtype([('timestep', np.int32), ('state', np.uint8, (84, 84)), ('action', np.int32), ('reward', np.float32), ('nonterminal', np.bool_)])
-blank_trans = (0, np.zeros((84, 84), dtype=np.uint8), 0, 0.0, False)
+Transition_dtype = np.dtype([('timestep', np.int32), ('state', np.float32, (64, 64)), ('action', np.int32), ('reward', np.float32), ('nonterminal', np.bool_)])
+blank_trans = (0, np.zeros((64, 64), dtype=np.float32), 0, 0.0, False)
 
 
 # Segment tree data structure where parent node values are sum/max of children node values
@@ -133,7 +132,7 @@ class ReplayMemory():
     # Retrieve all required transition data (from t - h to t + n)
     transitions = self._get_transitions(idxs)
     # Create un-discretised states and nth next states
-    all_states = transitions['state']
+    all_states = transitions['state'].astype(np.float32)
     states = torch.tensor(all_states[:, :self.history], device=self.device, dtype=torch.float32).div_(255)
     next_states = torch.tensor(all_states[:, self.n:self.n + self.history], device=self.device, dtype=torch.float32).div_(255)
     # Discrete actions to be used as index
