@@ -25,7 +25,10 @@ def test(args, env, T, dqn, val_mem, metrics, results_dir, evaluate=False):
         state, reward_sum, done = env.reset(), 0, False
 
       action = dqn.act_e_greedy(state)  # Choose an action ε-greedily
-      state, reward, done = env.step(action)  # Step
+      if not torch.is_tensor(action):
+        action = torch.tensor([[action]])
+ 
+      state, reward, done, _ = env.step(action)  # Step
       reward_sum += reward
       if args.render:
         env.render()
@@ -33,7 +36,7 @@ def test(args, env, T, dqn, val_mem, metrics, results_dir, evaluate=False):
       if done:
         T_rewards.append(reward_sum)
         break
-  env.close()
+  #env.close()
 
   # Test Q-values over validation memory
   for state in val_mem:  # Iterate over valid states
