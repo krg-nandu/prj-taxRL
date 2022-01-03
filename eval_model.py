@@ -14,6 +14,7 @@ from baselines.common.policies import build_policy
 from baselines.ppo2.runner import Runner
 import numpy as np
 from pathlib import Path
+from train_procgen.constants import HARD_GAME_RANGES as RANGE
 
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
@@ -34,8 +35,9 @@ gamma = .999
 lam = .95
 
 class EvalRunner(Runner):
-    def __init__(self, *, env, model, nsteps, gamma, lam):
+    def __init__(self, *, env, model, nsteps, gamma, lam, env_name):
         super().__init__(env=env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+        self.env_name = env_name
 
     def run(self):
         # Here, we init the lists that will contain the rewards at each time step for each env
@@ -58,7 +60,7 @@ class EvalRunner(Runner):
             mb_rewards.append(rewards)
             for i, done in enumerate(self.dones):
                 if done:
-                    episode_reward = infos[i]['episode']['r']
+                    episode_reward = (infos[i]['episode']['r'] - RANGE[self.env_name][0])/(RANGE[self.env_name][1] - RANGE[self.env_name][0])
                     episode_rewards.append(episode_reward)
                     #print('played', episodes, 'episodes,       reward:', episode_reward, ',       average:', np.mean(episode_rewards))
                     episodes += 1
@@ -82,7 +84,7 @@ def get_eval_env(env_name, num_envs, vision_mode, stochasticity):
 
 def get_mean_reward(model, env_name, num_envs, vision_mode=None, stochasticity=None):
     env = get_eval_env(env_name, num_envs, vision_mode, stochasticity)
-    mean_reward = evaluate(eval_env=env, model=model)
+    mean_reward = evaluate(eval_env=env, model=model, env_name=env_name)
 
     return mean_reward
 
@@ -114,8 +116,8 @@ def load_model(model_path, env_name, num_envs, vision_mode=None, stochasticity=N
 
     return model
 
-def evaluate(*, eval_env, model):
-    eval_runner = EvalRunner(env=eval_env, model=model, nsteps=nsteps, gamma=gamma, lam=lam)
+def evaluate(*, eval_env, model, env_name):
+    eval_runner = EvalRunner(env=eval_env, model=model, nsteps=nsteps, gamma=gamma, lam=lam, env_name=env_name)
     mean_score = eval_runner.run()
 
     return mean_score
@@ -141,8 +143,12 @@ if __name__ == "__main__":
     parser.add_argument('--use_decoder', action='store_true')
     parser.add_argument('--bottleneck', type=int, default=0)
     parser.add_argument('--output', type=str, required=True)
+    parser.add_argument('--test_generalization', action='store_true')
  
     args = parser.parse_args()
+
+    if args.test_generalization:
+        num_levels = 0
 
     BASE_PATH = args.BASE_PATH
     experiment_dir = os.path.join(BASE_PATH, args.env_name, args.experiment_name)
@@ -155,7 +161,7 @@ if __name__ == "__main__":
 
     open(filepath, 'w').close() # clear the file
     file = open(filepath, 'a')
-    file.write('model_checkpoint,meanreward\n')
+    file.write('model_checkpoint, mean_norm_reward\n')
     file.close()
 
     for model_checkpoint in sorted(os.listdir(models_dir)):
