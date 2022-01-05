@@ -7,7 +7,7 @@ from gym3 import VideoRecorderWrapper
 from procgen import ProcgenGym3Env
 import matplotlib.pyplot as plt
 
-env = ProcgenGym3Env(num=1, env_name="heistH", render_mode="rgb_array")
+env = ProcgenGym3Env(num=1, env_name="leaper", vision_mode='semantic_mask', distribution_mode='hard', num_levels=500, start_level=0, stochasticity=1., render_mode="rgb_array")
 env = VideoRecorderWrapper(env=env, directory=".", info_key="rgb")
 step = 0
 while True:

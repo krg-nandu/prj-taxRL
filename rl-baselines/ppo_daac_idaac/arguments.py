@@ -52,7 +52,7 @@ parser.add_argument(
 parser.add_argument(
     '--num_processes',
     type=int,
-    default=64,
+    default=256,
     help='how many training CPU processes to use')
 parser.add_argument(
     '--num_steps',
@@ -62,23 +62,27 @@ parser.add_argument(
 parser.add_argument(
     '--ppo_epoch',
     type=int,
-    default=1,
+    default=3,
     help='number of ppo epochs')
+
 parser.add_argument(
     '--num_mini_batch',
     type=int,
     default=8,
     help='number of batches for ppo')
+
 parser.add_argument(
     '--clip_param',
     type=float,
     default=0.2,
     help='ppo clip parameter')
+
 parser.add_argument(
     '--log_interval',
     type=int,
-    default=10,
+    default=50,
     help='log interval, one log per n updates')
+
 parser.add_argument(
     '--num_env_steps',
     type=int,
@@ -121,16 +125,19 @@ parser.add_argument(
     default=False,
     help='use the best hyperparameters for each game. \
     if False, use the same hyperparameters for all games (i.e. the default ones)')
+
 parser.add_argument(
     '--value_epoch',
     type=int,
     default=9,
     help='number of ppo epochs')
+
 parser.add_argument(
     '--value_freq',
     type=int,
     default=1,
     help='number of value epochs')
+
 parser.add_argument(
     '--adv_loss_coef', 
     type=float,
@@ -157,8 +164,9 @@ parser.add_argument(
 # Procgen arguments.
 parser.add_argument(
     '--distribution_mode',
-    default='hard',
+    default='easy',
     help='distribution of envs for procgen')
+
 parser.add_argument(
     '--num_levels',
     type=int,

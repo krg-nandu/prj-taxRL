@@ -26,7 +26,7 @@ distribution_mode = 'hard'
 num_levels = 500
 
 # runner and model variables
-nsteps = 4096
+nsteps = 4096 * 8
 nbatch_train = 0
 max_grad_norm = 0.5
 ent_coef = .01
