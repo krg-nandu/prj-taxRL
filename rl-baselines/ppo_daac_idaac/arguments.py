@@ -52,7 +52,7 @@ parser.add_argument(
 parser.add_argument(
     '--num_processes',
     type=int,
-    default=256,
+    default=64,
     help='how many training CPU processes to use')
 parser.add_argument(
     '--num_steps',
