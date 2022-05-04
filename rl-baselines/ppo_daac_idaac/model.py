@@ -296,6 +296,50 @@ class NonlinearOrderClassifier(nn.Module):
         x = self.main(emb)
         return x
 
+class PPOImpalaNet(nn.Module):
+    """
+    PPO Impala network same as the one used in the TF repo
+    """
+    def __init__(self, obs_shape, num_actions, base_kwargs=None, use_seg_front_end=False):
+        super(PPOImpalaNet, self).__init__()
+        
+        if base_kwargs is None:
+            base_kwargs = {}
+        
+        base = ResNetBase
+        
+        self.base = base(obs_shape[0], **base_kwargs)
+        self.dist = Categorical(self.base.output_size, num_actions)
+        
+    def forward(self, inputs):
+        raise NotImplementedError
+
+    def act(self, inputs, deterministic=False):
+        value, actor_features = self.base(inputs)
+        dist = self.dist(actor_features)
+
+        if deterministic:
+            action = dist.mode()
+        else:
+            action = dist.sample()
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+
+        return value, action, action_log_probs
+
+    def get_value(self, inputs):
+        value, _ = self.base(inputs)
+        return value
+
+    def evaluate_actions(self, inputs, action):
+        value, actor_features = self.base(inputs)
+        dist = self.dist(actor_features)
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+        
+        return value, action_log_probs, dist_entropy
 
 class PPOnet(nn.Module):
     """

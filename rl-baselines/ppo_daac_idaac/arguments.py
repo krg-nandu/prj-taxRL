@@ -52,7 +52,7 @@ parser.add_argument(
 parser.add_argument(
     '--num_processes',
     type=int,
-    default=64,
+    default=256, #64
     help='how many training CPU processes to use')
 parser.add_argument(
     '--num_steps',
@@ -80,13 +80,13 @@ parser.add_argument(
 parser.add_argument(
     '--log_interval',
     type=int,
-    default=50,
+    default=1,
     help='log interval, one log per n updates')
 
 parser.add_argument(
     '--num_env_steps',
     type=int,
-    default=25e6,
+    default=200e6,
     help='number of environment steps to train')
 parser.add_argument(
     '--env_name',
@@ -95,7 +95,7 @@ parser.add_argument(
     help='environment to train on')
 parser.add_argument(
     '--algo',
-    default='idaac',
+    default='ppo',
     choices=['idaac', 'daac', 'ppo'],
     help='algorithm to use')
 parser.add_argument(
