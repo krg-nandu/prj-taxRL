@@ -26,8 +26,8 @@ from procgen import ProcgenEnv
 
 save_interval = 50
 
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
+#os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
+#tf.compat.v1.logging.set_verbosity(tf.compat.v1.logging.ERROR)
 
 
 def train_fn(
@@ -79,7 +79,8 @@ def train_fn(
         start_level=start_level,
         distribution_mode=distribution_mode,
         stochasticity=stochasticity,
-        vision_mode=vision_mode
+        vision_mode=vision_mode,
+        #render_mode='rgb_array' if test_model_segmented else None
     )
 
     eval_venv = ProcgenEnv(
@@ -89,7 +90,8 @@ def train_fn(
             start_level=start_level,
             distribution_mode=distribution_mode,
             stochasticity=stochasticity,
-            vision_mode=vision_mode
+            vision_mode=vision_mode,
+            #render_mode='rgb_array' if test_model_segmented else None
     )
 
     venv = VecExtractDictObs(venv, "rgb")
@@ -116,9 +118,10 @@ def train_fn(
     if use_decoder:
         conv_fn = lambda x: build_conv_ae(x, bottleneck_dim=bottleneck, depths=[16,32,32], emb_size=256)
     else:
-        conv_fn = lambda x: build_impala_cnn(x, depths=[16, 32, 32], emb_size=256)
+        conv_fn = lambda x: build_impala_cnn(x, depths=[16, 32, 32], emb_size=256, use_segmentor=test_model_segmented)
 
     net = None
+    '''
     if test_model_segmented and env_name == 'climber':
         # this so far works only for climber!
         #device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -128,6 +131,20 @@ def train_fn(
         net = net.to(device=device)
         net.load_state_dict(torch.load(ckpt_path, map_location=device))
         net = net.eval()
+    '''
+    if test_model_segmented:
+        import onnxruntime as onnxrt
+        providers = [
+            ('CUDAExecutionProvider', {
+                'device_id': 1,
+                'arena_extend_strategy': 'kNextPowerOfTwo',
+                'gpu_mem_limit': 2 * 1024 * 1024 * 1024,
+                'cudnn_conv_algo_search': 'EXHAUSTIVE',
+                'do_copy_in_default_stream': True,
+            }),
+            'CPUExecutionProvider',
+        ]
+        net = onnxrt.InferenceSession("rl-baselines/resnetfpn_global_b64_x64.onnx", providers=['CUDAExecutionProvider'])
 
     logger.info("training")
 

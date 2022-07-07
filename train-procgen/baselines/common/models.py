@@ -25,7 +25,7 @@ def nature_cnn(unscaled_images, **conv_kwargs):
     h3 = conv_to_fc(h3)
     return activ(fc(h3, 'fc1', nh=512, init_scale=np.sqrt(2)))
 
-def build_impala_cnn(unscaled_images, depths=[16,32,32], **conv_kwargs):
+def build_impala_cnn(unscaled_images, depths=[16,32,32], use_segmentor=False, **conv_kwargs):
     """
     Model used in the paper "IMPALA: Scalable Distributed Deep-RL with
     Importance Weighted Actor-Learner Architectures" https://arxiv.org/abs/1802.01561
@@ -59,8 +59,11 @@ def build_impala_cnn(unscaled_images, depths=[16,32,32], **conv_kwargs):
         out = residual_block(out)
         return out
 
-    out = tf.cast(unscaled_images, tf.float32) / 255.
-
+    if use_segmentor:
+        out = tf.cast(unscaled_images, tf.float32)
+    else:
+        out = tf.cast(unscaled_images, tf.float32) / 255.
+ 
     for depth in depths:
         out = conv_sequence(out, depth)
 

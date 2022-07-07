@@ -23,7 +23,7 @@ from baselines.common.vec_env import (
 
 from ppo_daac_idaac import algo, utils
 from ppo_daac_idaac.arguments import parser
-from ppo_daac_idaac.model import PPOnet, PPOImpalaNet
+from ppo_daac_idaac.model import PPOnet, PPOImpalaNet, PPOImpalaNetMP
 from ppo_daac_idaac.storage import RolloutStorage
 from ppo_daac_idaac.envs import VecPyTorchProcgen
 
@@ -34,17 +34,19 @@ import tqdm, time
 
 torch.backends.cudnn.benchmark = True
 
+'''
 config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_lax.py'
 checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainall2k1/iter_18000.pth' 
-#'/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfishcoinrun4/iter_14000.pth' 
+'''
+
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x64.py'
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainall2k4_64/iter_18000.pth' 
 cfg = mmcv.Config.fromfile(config)
 
 # build the model and load checkpoint
 segModel = build_segmentor(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-#print("model={}".format(segModel))
 checkpoint = load_checkpoint(segModel, checkpoint, map_location='cpu')
-segModel = segModel.to('cuda:0')
-segModel = segModel.eval()
+#segModel = segModel.to('cuda:1')
 
 mean = torch.tensor(cfg['img_norm_cfg']['mean'], dtype=torch.float32).reshape(3,1,1)
 std = torch.tensor(cfg['img_norm_cfg']['std'], dtype=torch.float32).reshape(3,1,1)
@@ -92,6 +94,9 @@ def train(args):
     logger.configure(dir=log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
     print("\nLog File: ", log_file)
 
+    mean = torch.tensor(cfg['img_norm_cfg']['mean'], dtype=torch.float32).reshape(3,1,1).unsqueeze(0).unsqueeze(0).to(device)
+    std = torch.tensor(cfg['img_norm_cfg']['std'], dtype=torch.float32).reshape(3,1,1).unsqueeze(0).unsqueeze(0).to(device)
+
     venv = ProcgenEnv(
             num_envs=args.num_processes, 
             env_name=args.env_name,
@@ -100,7 +105,6 @@ def train(args):
             distribution_mode=args.distribution_mode,
             stochasticity=args.stochasticity,
             vision_mode=args.vision_mode,
-            render_mode='rgb_array'
     )
 
     venv = VecExtractDictObs(venv, "rgb")
@@ -108,6 +112,7 @@ def train(args):
     venv = VecNormalize(venv=venv, ob=False)
     envs = VecPyTorchProcgen(venv, device)
 
+    # we also assume that the seg flag is always gonna be true
     if args.seg:
         obs_shape = (16,64,64)
     else:
@@ -117,7 +122,8 @@ def train(args):
                 obs_shape,
                 envs.action_space.n,
                 base_kwargs={'hidden_size': args.hidden_size},
-                use_seg_front_end = args.seg
+                use_seg_front_end=args.seg,
+                front_end = {'model': segModel, 'mu': mean, 'std': std}
                 )    
     actor_critic.to(device)
     print("\n Actor-Critic Network: ", actor_critic)
@@ -146,18 +152,13 @@ def train(args):
 
     nsteps = torch.zeros(args.num_processes)
     for j in range(num_updates):
+        st = time.time()
         actor_critic.train()
-
+        
         for step in tqdm.tqdm(range(args.num_steps)):
             # Sample actions
             with torch.no_grad():
-                if args.seg:
-                    _obs = extract_obs_tensor(envs)
-                    _obs = _obs.to(device)
-                    _seg = segModel.infer(_obs).squeeze()
-                    value, action, action_log_prob = actor_critic.act(_seg)
-                else:
-                    value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
+                value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
 
             obs, reward, done, infos = envs.step(action)
 
@@ -176,17 +177,14 @@ def train(args):
                                 reward, masks)
 
         with torch.no_grad():
-            if args.seg:
-                _obs = extract_obs_tensor(envs)
-                _obs = _obs.to(device)
-                _seg = segModel.infer(_obs).squeeze()
-                next_value = actor_critic.get_value(_seg).detach()
-            else:
-                next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
+            next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
         
         rollouts.compute_returns(next_value, args.gamma, args.gae_lambda)
         value_loss, action_loss, dist_entropy = agent.update(rollouts)    
         rollouts.after_update()
+
+        ed = time.time()
+        print('Elapsed time: {}s'.format(ed - st))
 
         # Save Model
         #if j == num_updates - 1 and args.save_dir != "":

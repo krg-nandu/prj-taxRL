@@ -8,7 +8,7 @@ from baselines.common.mpi_running_mean_std import RunningMeanStd
 from baselines.common.models import get_network_builder
 
 import gym
-
+import numpy as np
 
 class PolicyWithValue(object):
     """
@@ -134,13 +134,20 @@ class PolicyWithValue(object):
     def load(self, load_path):
         tf_util.load_state(load_path, sess=self.sess)
 
-def build_policy(env, policy_network, value_network=None,  normalize_observations=False, estimate_q=False, use_decoder=False, **policy_kwargs):
+def build_policy(env, policy_network, value_network=None,  normalize_observations=False, estimate_q=False, use_decoder=False, use_segmentor=False, **policy_kwargs):
+    
     if isinstance(policy_network, str):
         network_type = policy_network
         policy_network = get_network_builder(network_type)(**policy_kwargs)
 
     def policy_fn(nbatch=None, nsteps=None, sess=None, observ_placeholder=None):
-        ob_space = env.observation_space
+
+        if use_segmentor:
+            ob_space = gym.spaces.Box(low=0., high=1., shape=(64,64,16), dtype=np.float32)
+            #ob_space = gym.spaces.Box(low=0., high=1., shape=(64,64,19), dtype=np.float32)
+
+        else:            
+            ob_space = env.observation_space
 
         X = observ_placeholder if observ_placeholder is not None else observation_placeholder(ob_space, batch_size=nbatch)
 

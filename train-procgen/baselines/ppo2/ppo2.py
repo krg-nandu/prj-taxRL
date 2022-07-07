@@ -85,7 +85,11 @@ def learn(*, network, env, total_timesteps, eval_env = None, seed=None, nsteps=2
     else: assert callable(cliprange)
     total_timesteps = int(total_timesteps)
 
-    policy = build_policy(env, network, use_decoder=use_decoder, **network_kwargs)
+    use_segmentor = False
+    if type(seg_net) != type(None):
+        use_segmentor = True
+
+    policy = build_policy(env, network, use_decoder=use_decoder, use_segmentor=use_segmentor, **network_kwargs)
 
     # Get the nb of env
     nenvs = env.num_envs

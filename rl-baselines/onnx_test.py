@@ -31,20 +31,29 @@ from mmseg.models import build_segmentor
 from mmcv.runner import load_checkpoint
 import mmcv
 import tqdm, time
+import onnxruntime as onnxrt
+
 
 torch.backends.cudnn.benchmark = True
-
+'''
 config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_lax.py'
 checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainall2k1/iter_18000.pth' 
+'''
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x64.py'
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainall2k4_64/iter_18000.pth' 
+
+
 #'/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfishcoinrun4/iter_14000.pth' 
 cfg = mmcv.Config.fromfile(config)
 
+'''
 # build the model and load checkpoint
 segModel = build_segmentor(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
 #print("model={}".format(segModel))
 checkpoint = load_checkpoint(segModel, checkpoint, map_location='cpu')
 segModel = segModel.to('cuda:0')
 segModel = segModel.eval()
+'''
 
 mean = torch.tensor(cfg['img_norm_cfg']['mean'], dtype=torch.float32).reshape(3,1,1)
 std = torch.tensor(cfg['img_norm_cfg']['std'], dtype=torch.float32).reshape(3,1,1)
@@ -144,6 +153,19 @@ def train(args):
     num_updates = int(
         args.num_env_steps) // args.num_steps // args.num_processes 
 
+    providers = [
+        ('CUDAExecutionProvider', {
+            'device_id': 0,
+            'arena_extend_strategy': 'kNextPowerOfTwo',
+            'gpu_mem_limit': 2 * 1024 * 1024 * 1024,
+            'cudnn_conv_algo_search': 'EXHAUSTIVE',
+            'do_copy_in_default_stream': True,
+        }),
+        'CPUExecutionProvider',
+    ]
+    onnx_session= onnxrt.InferenceSession("resnetfpn_global_b64_x64.onnx", providers=['CUDAExecutionProvider']) #providers=providers)
+    #import ipdb; ipdb.set_trace()
+
     nsteps = torch.zeros(args.num_processes)
     for j in range(num_updates):
         actor_critic.train()
@@ -152,10 +174,29 @@ def train(args):
             # Sample actions
             with torch.no_grad():
                 if args.seg:
-                    _obs = extract_obs_tensor(envs)
-                    _obs = _obs.to(device)
-                    _seg = segModel.infer(_obs).squeeze()
-                    value, action, action_log_prob = actor_critic.act(_seg)
+                    #import ipdb; ipdb.set_trace()
+                    #_obs = extract_obs_tensor(envs)
+                    #_obs = _obs.to(device)
+                    #_seg = segModel.infer(_obs).squeeze()
+                    #onnx_op = onnx_session.run(None, {'img': _obs.numpy()})
+
+                    myobs = (obs * 255.).unsqueeze(0).cpu().numpy()
+                    mn = mean.unsqueeze(0).unsqueeze(0).numpy()
+                    st = std.unsqueeze(0).unsqueeze(0).numpy()
+                    myobs = (myobs - mn)/st
+                    onnx_op = onnx_session.run(None, {'img': myobs})
+
+                    ops = torch.tensor(onnx_op[0]).squeeze().to(device)
+
+                    im = np.vstack(ops[0].cpu().numpy())
+                    plt.subplot(121)
+                    #plt.imshow(_obs[0,0].permute(1,2,0).numpy())
+                    plt.imshow(myobs[0,0].transpose(1,2,0))
+                    plt.subplot(122)
+                    plt.imshow(im)
+
+                    plt.show()
+                    value, action, action_log_prob = actor_critic.act(ops)
                 else:
                     value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
 

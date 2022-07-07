@@ -68,7 +68,7 @@ parser.add_argument(
 parser.add_argument(
     '--num_mini_batch',
     type=int,
-    default=8,
+    default=8, # this seems to be a sensitive parameter
     help='number of batches for ppo')
 
 parser.add_argument(
@@ -196,4 +196,9 @@ parser.add_argument(
     type=float, 
     default=1.)
 
- 
+parser.add_argument(
+    '--seg', 
+    action='store_true',
+    default=False)
+
+

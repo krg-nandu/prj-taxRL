@@ -140,7 +140,9 @@ class ResNetBase(NNBase):
         self.flatten = Flatten()
         self.relu = nn.ReLU()
 
-        self.fc = init_relu_(nn.Linear(2048, hidden_size))
+        #self.fc = init_relu_(nn.Linear(2048, hidden_size))
+        self.fc = init_relu_(nn.Linear(8192, hidden_size))
+
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 
         apply_init_(self.modules())
@@ -300,7 +302,7 @@ class PPOImpalaNet(nn.Module):
     """
     PPO Impala network same as the one used in the TF repo
     """
-    def __init__(self, obs_shape, num_actions, base_kwargs=None, use_seg_front_end=False):
+    def __init__(self, obs_shape, num_actions, base_kwargs=None, use_seg_front_end=False, front_end=None):
         super(PPOImpalaNet, self).__init__()
         
         if base_kwargs is None:
@@ -310,12 +312,25 @@ class PPOImpalaNet(nn.Module):
         
         self.base = base(obs_shape[0], **base_kwargs)
         self.dist = Categorical(self.base.output_size, num_actions)
-        
+
+        self.use_seg_front_end = use_seg_front_end
+        if use_seg_front_end:
+            self.segnet = front_end['model']
+            self.mu = front_end['mu']
+            self.std = front_end['std']
+    
     def forward(self, inputs):
         raise NotImplementedError
 
     def act(self, inputs, deterministic=False):
-        value, actor_features = self.base(inputs)
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = segmaps * inputs.mean(dim=1, keepdim=True)
+            value, actor_features = self.base(segmaps)
+        else:
+            value, actor_features = self.base(inputs)
+        
         dist = self.dist(actor_features)
 
         if deterministic:
@@ -329,11 +344,25 @@ class PPOImpalaNet(nn.Module):
         return value, action, action_log_probs
 
     def get_value(self, inputs):
-        value, _ = self.base(inputs)
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = segmaps * inputs.mean(dim=1, keepdim=True)
+            value, _ = self.base(segmaps)
+        else:
+            value, _ = self.base(inputs)
+ 
         return value
 
     def evaluate_actions(self, inputs, action):
-        value, actor_features = self.base(inputs)
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = segmaps * inputs.mean(dim=1, keepdim=True)
+            value, actor_features = self.base(segmaps)
+        else:
+            value, actor_features = self.base(inputs)
+
         dist = self.dist(actor_features)
 
         action_log_probs = dist.log_probs(action)
@@ -341,19 +370,119 @@ class PPOImpalaNet(nn.Module):
         
         return value, action_log_probs, dist_entropy
 
-class PPOnet(nn.Module):
+class PPOImpalaNetMP(nn.Module):
     """
-    PPO netowrk 
+    PPO Impala network same as the one used in the TF repo
     """
-    def __init__(self, obs_shape, num_actions, base_kwargs=None):
-        super(PPOnet, self).__init__()
+    def __init__(self, obs_shape, num_actions, base_kwargs=None, use_seg_front_end=False, front_end=None):
+        super(PPOImpalaNetMP, self).__init__()
         
         if base_kwargs is None:
             base_kwargs = {}
         
         base = ResNetBase
         
-        self.base = base(obs_shape[0], **base_kwargs)
+        self.base = base(obs_shape[0], **base_kwargs).cuda(1)
+        self.dist = Categorical(self.base.output_size, num_actions).cuda(1)
+
+        self.use_seg_front_end = use_seg_front_end
+        if use_seg_front_end:
+            self.segnet = front_end['model'].cuda(0)
+            self.mu = front_end['mu'].cuda(0)
+            self.std = front_end['std'].cuda(0)
+    
+    def forward(self, inputs):
+        raise NotImplementedError
+
+    def act(self, inputs, deterministic=False):
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = (segmaps * inputs.mean(dim=1, keepdim=True)).cuda(1)
+            value, actor_features = self.base(segmaps)
+        else:
+            value, actor_features = self.base(inputs)
+        
+        dist = self.dist(actor_features)
+
+        if deterministic:
+            action = dist.mode()
+        else:
+            action = dist.sample()
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+
+        return value, action, action_log_probs
+
+    def get_value(self, inputs):
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = (segmaps * inputs.mean(dim=1, keepdim=True)).cuda(1)
+            value, _ = self.base(segmaps)
+        else:
+            value, _ = self.base(inputs)
+ 
+        return value
+
+    def evaluate_actions(self, inputs, action):
+        if self.use_seg_front_end:
+            segmaps = ((inputs.unsqueeze(0) * 255.) - self.mu)/self.std
+            segmaps = self.segnet.infer(segmaps).squeeze()
+            segmaps = (segmaps * inputs.mean(dim=1, keepdim=True)).cuda(1)
+            value, actor_features = self.base(segmaps)
+        else:
+            value, actor_features = self.base(inputs)
+
+        dist = self.dist(actor_features)
+
+        action_log_probs = dist.log_probs(action)
+        dist_entropy = dist.entropy().mean()
+        
+        return value, action_log_probs, dist_entropy
+
+class MLPBase(nn.Module):
+    def __init__(self, input_shape, hidden_sizes=[512,256]):
+        super(MLPBase, self).__init__()
+        
+        layers = []
+        input_sz = input_shape
+        for output_sz in hidden_sizes:
+            layers.append(nn.Linear(input_sz, output_sz))
+            input_sz = output_sz
+            layers.append(nn.ReLU())
+
+        self.net = nn.Sequential(*layers)
+
+        apply_init_(self.modules())
+        self.train()
+
+        self.output_size = hidden_sizes[-1]
+        self.critic_linear = init_(nn.Linear(self.output_size, 1))
+
+    def forward(self, inputs):
+        x = self.net(inputs)
+        return self.critic_linear(x), x
+
+class PPOnet(nn.Module):
+    """
+    PPO netowrk 
+    """
+    def __init__(self, obs_shape, num_actions, base_kwargs=None, wCLIP=False):
+        super(PPOnet, self).__init__()
+        
+        if base_kwargs is None:
+            base_kwargs = {}
+
+        if wCLIP:
+            base = MLPBase
+            self.base = base(obs_shape[0])
+        else:
+            base = ResNetBase
+            self.base = base(obs_shape[0], **base_kwargs)
+       
+        #self.base = base(obs_shape[0], **base_kwargs)
         self.dist = Categorical(self.base.output_size, num_actions)
         
     def forward(self, inputs):

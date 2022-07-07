@@ -23,7 +23,7 @@ from baselines.common.vec_env import (
 
 from ppo_daac_idaac import algo, utils
 from ppo_daac_idaac.arguments import parser
-from ppo_daac_idaac.model import PPOnet, PPOImpalaNet
+from ppo_daac_idaac.model import PPOnet, PPOImpalaNet, PPOImpalaNetMP
 from ppo_daac_idaac.storage import RolloutStorage
 from ppo_daac_idaac.envs import VecPyTorchProcgen
 
@@ -31,30 +31,24 @@ from mmseg.models import build_segmentor
 from mmcv.runner import load_checkpoint
 import mmcv
 import tqdm, time
+import onnxruntime as onnxrt
 
 torch.backends.cudnn.benchmark = True
 
-config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_lax.py'
-checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainall2k1/iter_18000.pth' 
-#'/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfishcoinrun4/iter_14000.pth' 
-cfg = mmcv.Config.fromfile(config)
-
-# build the model and load checkpoint
-segModel = build_segmentor(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
-#print("model={}".format(segModel))
-checkpoint = load_checkpoint(segModel, checkpoint, map_location='cpu')
-segModel = segModel.to('cuda:0')
-segModel = segModel.eval()
-
-mean = torch.tensor(cfg['img_norm_cfg']['mean'], dtype=torch.float32).reshape(3,1,1)
-std = torch.tensor(cfg['img_norm_cfg']['std'], dtype=torch.float32).reshape(3,1,1)
-
-def extract_obs_tensor(envs):
+def extract_obs_tensor(envs, mean, std, device):
     info = envs.venv.venv.venv.env.get_info()
     obs = np.stack([x['rgb'] for x in info])
-    _obs = torch.tensor(obs, dtype=torch.float32).permute(0,3,1,2).unsqueeze(0)
+    _obs = torch.tensor(obs, dtype=torch.float32).permute(0,3,1,2).unsqueeze(0).to(device)
     _obs = (_obs - mean) / std
     return _obs
+
+def extract_obs_tensor_simple(envs, device):
+    info = envs.venv.venv.venv.env.get_info()
+    obs = np.stack([x['rgb'] for x in info])
+    _obs = torch.tensor(obs, dtype=torch.float32).permute(0,3,1,2).to(device)
+    _obs = _obs / 255.
+    return _obs
+
 
 def train(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -108,22 +102,20 @@ def train(args):
     venv = VecNormalize(venv=venv, ob=False)
     envs = VecPyTorchProcgen(venv, device)
 
-    if args.seg:
-        obs_shape = (16,64,64)
-    else:
-        obs_shape = envs.observation_space.shape     
+    obs_shape = (3, 128, 128)
+    #obs_shape = envs.observation_space.shape     
  
-    actor_critic = PPOImpalaNet(
+    actor_critic = PPOnet(
                 obs_shape,
                 envs.action_space.n,
-                base_kwargs={'hidden_size': args.hidden_size},
-                use_seg_front_end = args.seg
+                base_kwargs={'hidden_size': args.hidden_size}
                 )    
     actor_critic.to(device)
     print("\n Actor-Critic Network: ", actor_critic)
 
     rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                                envs.observation_space.shape, envs.action_space)
+                                obs_shape, envs.action_space)
+
     batch_size = int(args.num_processes * args.num_steps / args.num_mini_batch)
     agent = algo.PPO(
             actor_critic,
@@ -137,7 +129,8 @@ def train(args):
             max_grad_norm=args.max_grad_norm)
 
     obs = envs.reset()
-    rollouts.obs[0].copy_(obs)
+    _obs = extract_obs_tensor_simple(envs, device)
+    rollouts.obs[0].copy_(_obs)
     rollouts.to(device)
 
     episode_rewards = deque(maxlen=100)
@@ -146,18 +139,13 @@ def train(args):
 
     nsteps = torch.zeros(args.num_processes)
     for j in range(num_updates):
+        st = time.time()
         actor_critic.train()
-
+ 
         for step in tqdm.tqdm(range(args.num_steps)):
             # Sample actions
             with torch.no_grad():
-                if args.seg:
-                    _obs = extract_obs_tensor(envs)
-                    _obs = _obs.to(device)
-                    _seg = segModel.infer(_obs).squeeze()
-                    value, action, action_log_prob = actor_critic.act(_seg)
-                else:
-                    value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
+                value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
 
             obs, reward, done, infos = envs.step(action)
 
@@ -171,22 +159,21 @@ def train(args):
 
             nsteps += 1 
             nsteps[done == True] = 0
-            
-            rollouts.insert(obs, action, action_log_prob, value, \
+
+            _obs = extract_obs_tensor_simple(envs, device)           
+            # instead of obs!
+            rollouts.insert(_obs, action, action_log_prob, value, \
                                 reward, masks)
 
         with torch.no_grad():
-            if args.seg:
-                _obs = extract_obs_tensor(envs)
-                _obs = _obs.to(device)
-                _seg = segModel.infer(_obs).squeeze()
-                next_value = actor_critic.get_value(_seg).detach()
-            else:
-                next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
+            next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
         
         rollouts.compute_returns(next_value, args.gamma, args.gae_lambda)
         value_loss, action_loss, dist_entropy = agent.update(rollouts)    
         rollouts.after_update()
+
+        ed = time.time()
+        print('Elapsed time: {}s'.format(ed - st))
 
         # Save Model
         #if j == num_updates - 1 and args.save_dir != "":
@@ -215,13 +202,14 @@ def train(args):
             logger.logkv("train/mean_episode_reward", np.mean(episode_rewards))
             logger.logkv("train/median_episode_reward", np.median(episode_rewards))
 
+            '''
             # Log eval stats (on the full distribution of levels) 
             eval_episode_rewards = evaluate(args, actor_critic, device)
             logger.logkv("test/mean_episode_reward", np.mean(eval_episode_rewards))
             logger.logkv("test/median_episode_reward", np.median(eval_episode_rewards))
+            '''
 
             logger.dumpkvs()
-
 
 if __name__ == "__main__":
     args = parser.parse_args()

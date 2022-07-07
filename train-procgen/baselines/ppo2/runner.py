@@ -2,7 +2,12 @@
 import numpy as np
 from baselines.common.runners import AbstractEnvRunner
 import matplotlib.pyplot as plt
-import os
+import os, sys, tqdm
+
+sys.path.insert(0, '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main')
+import mmcv
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x64.py'
+cfg = mmcv.Config.fromfile(config)
 
 class Runner(AbstractEnvRunner):
     """
@@ -20,6 +25,10 @@ class Runner(AbstractEnvRunner):
         # Discount rate
         self.gamma = gamma
         self.seg_net = seg_net
+        mn = np.array(cfg['img_norm_cfg']['mean'])
+        self.mean = mn[np.newaxis, np.newaxis, :, np.newaxis, np.newaxis]
+        std = np.array(cfg['img_norm_cfg']['std'])
+        self.std = std[np.newaxis, np.newaxis, :, np.newaxis, np.newaxis]
 
     def run(self, save_recon_gif=False, exp_name='ninjaAE128_low'):
         # Here, we init the lists that will contain the mb of experiences
@@ -29,9 +38,35 @@ class Runner(AbstractEnvRunner):
         mb_recon = []
 
         # For n in range number of steps
-        for _ in range(self.nsteps):
-            # pass obs through the gammanet
+        for _ in tqdm.tqdm(range(self.nsteps)):
+
+            '''
+            # pass obs through the gammanet?
             if type(self.seg_net) != type(None):
+                info = self.env.venv.venv.venv.env.get_info()
+                obs = np.stack([x['rgb'] for x in info])
+                obs = np.expand_dims(obs.transpose(0,3,1,2), 0)
+                obs = (obs - self.mean)/self.std
+                obs = obs.astype(np.float32)
+                res = self.seg_net.run(None, {'img': obs})
+                self.obs = res[0].squeeze().transpose(0,2,3,1).copy()
+            '''
+            if type(self.seg_net) != type(None):
+                obs = np.expand_dims(self.obs.transpose(0,3,1,2), 0)
+                obs = (obs - self.mean)/self.std
+                obs = obs.astype(np.float32)
+                res = self.seg_net.run(None, {'img': obs})
+
+                # MOD0: Use just the seg masks (16 channels) 
+                #self.obs = res[0].squeeze().transpose(0,2,3,1).copy()
+                
+                # MOD1: Append RGB to the SegMask (19 channels)
+                #self.obs = np.concatenate([res[0].squeeze().transpose(0,2,3,1), self.obs/255.], axis=-1)
+
+                # MOD2: Channel-wise multiply gray scale with masks
+                self.obs = res[0].squeeze().transpose(0,2,3,1) * self.obs.mean(axis=-1, keepdims=True)
+                #import ipdb; ipdb.set_trace() 
+                '''
                 X = self.obs.transpose((0, 3, 1, 2)) / 255.
                 Y = torch.as_tensor(X.copy()).float().contiguous().to('cuda:1')
                 Z = self.seg_net(Y)
@@ -40,6 +75,7 @@ class Runner(AbstractEnvRunner):
                 # for climber N_MAX = 5 (0-4)
                 Z = ((Z/4.)*255).astype(np.uint8).repeat(3, axis=-1)
                 self.obs = Z.copy()
+                '''
 
             # Given observations, get action value and neglopacs
             # We already have self.obs because Runner superclass run self.obs[:] = env.reset() on init
@@ -55,7 +91,9 @@ class Runner(AbstractEnvRunner):
 
             # Take actions in env and look the results
             # Infos contains a ton of useful informations
-            self.obs[:], rewards, self.dones, infos = self.env.step(actions)
+            #self.obs[:], rewards, self.dones, infos = self.env.step(actions)
+            self.obs, rewards, self.dones, infos = self.env.step(actions)
+            
             for info in infos:
                 maybeepinfo = info.get('episode')
                 if maybeepinfo:
@@ -75,7 +113,23 @@ class Runner(AbstractEnvRunner):
         mb_values = np.asarray(mb_values, dtype=np.float32)
         mb_neglogpacs = np.asarray(mb_neglogpacs, dtype=np.float32)
         mb_dones = np.asarray(mb_dones, dtype=np.bool)
-        last_values = self.model.value(self.obs, S=self.states, M=self.dones)
+
+
+        if type(self.seg_net) != type(None):
+            #info = self.env.venv.venv.venv.env.get_info()
+            #obs = np.stack([x['rgb'] for x in info])
+            obs = np.expand_dims(self.obs.transpose(0,3,1,2), 0)
+            obs = (obs - self.mean)/self.std
+            obs = obs.astype(np.float32)
+            res = self.seg_net.run(None, {'img': obs})
+            #obs = res[0].squeeze().transpose(0,2,3,1).copy()
+            #obs = np.concatenate([res[0].squeeze().transpose(0,2,3,1), self.obs/255.], axis=-1)
+            obs = res[0].squeeze().transpose(0,2,3,1) * self.obs.mean(axis=-1, keepdims=True)
+
+        else:
+            obs = self.obs.copy()
+
+        last_values = self.model.value(obs, S=self.states, M=self.dones) # self.obs
 
         if save_recon_gif:
             mb_recon = np.asarray(mb_recon)
@@ -89,7 +143,6 @@ class Runner(AbstractEnvRunner):
             for ts in range(recon.shape[0]):
                 ax1.clear()
                 #ax2.clear()
-
                 #ax1.imshow(mb_obs[ts][0])
                 #ax1.axis('off')
                 ax1.imshow(mb_recon[ts][0])
@@ -116,6 +169,7 @@ class Runner(AbstractEnvRunner):
         mb_returns = mb_advs + mb_values
         return (*map(sf01, (mb_obs, mb_returns, mb_dones, mb_actions, mb_values, mb_neglogpacs)),
             mb_states, epinfos)
+
 # obs, returns, masks, actions, values, neglogpacs, states = runner.run()
 def sf01(arr):
     """
