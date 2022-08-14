@@ -1,3 +1,5 @@
+# -*- coding: utf-8 -*-
+
 import os, sys
 sys.path.insert(0, '../train-procgen/')
 sys.path.insert(0, '../')
@@ -17,7 +19,7 @@ def train_fn(
     # 'shared' = shared policy and value networks
     # 'dual' = separate policy and value networks
     # 'detach' = shared policy and value networks, but with the value function gradient detached during the policy phase to avoid interference
-    interacts_total=100_000_000,
+    interacts_total=100000000,
     num_envs=64,
     n_epoch_pi=1,
     n_epoch_vf=1,
@@ -37,12 +39,13 @@ def train_fn(
     num_levels=None,
     start_level=None,
     vision_mode=None,
-    stochasticity=None
+    stochasticity=None,
+    port=44000
     ):
 
     if comm is None:
         comm = MPI.COMM_WORLD
-    tu.setup_dist(comm=comm)
+    tu.setup_dist(comm=comm, start_port=port)
     tu.register_distributions_for_tree_util()
 
     abspath = os.path.abspath(__file__)
@@ -56,7 +59,7 @@ def train_fn(
 
     if os.path.isdir(log_dir):
         print('Error: {}/ is already a directory, try a different --experiment_name.'.format(log_dir))
-        #os._exit(0)
+        os._exit(0)
     else:
         os.makedirs(log_dir)
         print('logging results to {}/.'.format(log_dir))
@@ -94,7 +97,7 @@ def train_fn(
         interacts_total=interacts_total,
         ppo_hps=dict(
             lr=lr,
-            γ=gamma,
+            γ=gamma, 
             λ=0.95,
             nminibatch=nminibatch,
             n_epoch_vf=n_epoch_vf,
@@ -133,6 +136,7 @@ def main():
     parser.add_argument('--stochasticity', type=float, default=1.)
 
     ## PPG HYPERPARAMETERS
+    parser.add_argument('--port', type=int, default=44000, required=True)
     parser.add_argument('--n_epoch_pi', type=int, default=1)
     parser.add_argument('--n_epoch_vf', type=int, default=1)
     parser.add_argument('--n_aux_epochs', type=int, default=6)
@@ -162,7 +166,8 @@ def main():
         comm=comm,
         experiment_name=args.experiment_name,
         num_levels=args.num_levels,
-        start_level=args.start_level
+        start_level=args.start_level,
+        port=args.port
     )
 
 if __name__ == '__main__':

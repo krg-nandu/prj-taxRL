@@ -26,8 +26,11 @@ checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness
 
 '''
 
-config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x128LW.py'
-checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish10_128multiscaleboth_LW/iter_13000.pth' 
+#config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x128LW.py'
+#checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish10_128multiscaleboth_LW/iter_13000.pth' 
+
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish13_128_hgru_LW/iter_13000.pth'
 
 cfg = mmcv.Config.fromfile(config)
 
@@ -42,7 +45,7 @@ output_names = ["all_pred_mask"]
 
 torch.onnx.export(segModel, 
                   dummy_input,
-                  "RFPN_MultiScale_b32_x128LW.onnx",
+                  'hGRU_b32_x128LW.onnx', #"RFPN_MultiScale_b32_x128LW.onnx",
                   opset_version=11,
                   verbose=False,
                   input_names=input_names,
