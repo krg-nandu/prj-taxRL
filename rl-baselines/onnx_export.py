@@ -30,7 +30,7 @@ checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness
 #checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish10_128multiscaleboth_LW/iter_13000.pth' 
 
 config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
-checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish13_128_hgru_LW/iter_13000.pth'
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_traingood7v1_128_hgru_LW_2nd/iter_11000.pth'
 
 cfg = mmcv.Config.fromfile(config)
 

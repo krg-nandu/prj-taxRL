@@ -36,10 +36,17 @@ import onnxruntime as onnxrt
 torch.backends.cudnn.benchmark = True
 
 #config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x128LW.py'
-config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
-
 #checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish9_128multiscaleboth/iter_18000.pth' 
+
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_traingood7v1_128_hgru_LW_2nd/iter_11000.pth'
+
 cfg = mmcv.Config.fromfile(config)
+
+# build the model and load checkpoint
+segModel = build_segmentor(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
+checkpoint = load_checkpoint(segModel, checkpoint, map_location='cpu')
+segModel = segModel.to('cuda:0')
 
 def extract_obs_tensor(envs, mean, std, device):
     info = envs.venv.venv.venv.env.get_info()
@@ -133,14 +140,14 @@ def train(args):
 
     # LOAD THE ONNX RUNTIME
     #onnx_session= onnxrt.InferenceSession("RFPN_MultiScale_b32_x128LW.onnx", providers=['CUDAExecutionProvider'])
-    onnx_session= onnxrt.InferenceSession("hGRU_b32_x128LW.onnx") #, providers=['CUDAExecutionProvider'])
+    #onnx_session= onnxrt.InferenceSession("hGRU_b32_x128LW.onnx") #, providers=['CUDAExecutionProvider'])
      
-    import ipdb; ipdb.set_trace()
     obs = envs.reset()
     _obs = extract_obs_tensor(envs, mean, std, device)
 
     with torch.no_grad():
-        onnx_op = onnx_session.run(None, {'img': _obs.cpu().numpy()})
+        #onnx_op = onnx_session.run(None, {'img': _obs.cpu().numpy()})
+        onnx_op = segModel(_obs)
 
     _obs = torch.tensor(onnx_op[0].squeeze()).to(device)
     rollouts.obs[0].copy_(_obs)
@@ -175,7 +182,9 @@ def train(args):
             
             _obs = extract_obs_tensor(envs, mean, std, device)
             with torch.no_grad():
-                onnx_op = onnx_session.run(None, {'img': _obs.cpu().numpy()})
+                #onnx_op = onnx_session.run(None, {'img': _obs.cpu().numpy()})
+                onnx_op = segModel(_obs)
+
             _obs = torch.tensor(onnx_op[0].squeeze()).to(device)
             
             # instead of obs!
