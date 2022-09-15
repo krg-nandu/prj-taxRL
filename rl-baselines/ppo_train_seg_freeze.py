@@ -132,10 +132,9 @@ def train(args):
             max_grad_norm=args.max_grad_norm)
 
     # LOAD THE ONNX RUNTIME
-    #onnx_session= onnxrt.InferenceSession("RFPN_MultiScale_b32_x128LW.onnx", providers=['CUDAExecutionProvider'])
-    onnx_session= onnxrt.InferenceSession("hGRU_b32_x128LW.onnx") #, providers=['CUDAExecutionProvider'])
+    onnx_session = onnxrt.InferenceSession("RFPN_MultiScale_b32_x128LW.onnx", providers=['CUDAExecutionProvider'])
+    #onnx_session= onnxrt.InferenceSession("hGRU_b32_x128LW_LN.onnx", providers=['CUDAExecutionProvider'])
      
-    import ipdb; ipdb.set_trace()
     obs = envs.reset()
     _obs = extract_obs_tensor(envs, mean, std, device)
 
@@ -172,7 +171,7 @@ def train(args):
 
             nsteps += 1 
             nsteps[done == True] = 0
-            
+
             _obs = extract_obs_tensor(envs, mean, std, device)
             with torch.no_grad():
                 onnx_op = onnx_session.run(None, {'img': _obs.cpu().numpy()})
@@ -195,15 +194,16 @@ def train(args):
         # Save Model
         #if j == num_updates - 1 and args.save_dir != "":
         if (j % 10 == 0)  and args.save_dir != "":
+            save_dir = os.path.join(log_dir, args.save_dir)
             try:
-                os.makedirs(args.save_dir)
+                os.makedirs(save_dir)
             except OSError:
                 pass
 
             torch.save([
                 actor_critic,
                 getattr(envs, 'ob_rms', None)
-            ], os.path.join(args.save_dir, "agent{}.pt".format(log_file))) 
+            ], os.path.join(save_dir, "agent{}.pt".format(log_file))) 
 
         # Save Logs
         total_num_steps = (j + 1) * args.num_processes * args.num_steps

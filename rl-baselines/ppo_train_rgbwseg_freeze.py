@@ -1,6 +1,11 @@
 import os, sys
+import matplotlib.pyplot as plt
+
+sys.path.insert(0, '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main')
 sys.path.insert(0, '../train-procgen/')
 sys.path.insert(0, '../')
+os.environ['PT_OUTPUT_DIR'] = 'testop'
+os.environ['OMP_NUM_THREADS'] = '1'
 
 import torch
 import numpy as np
@@ -18,12 +23,30 @@ from baselines.common.vec_env import (
 
 from ppo_daac_idaac import algo, utils
 from ppo_daac_idaac.arguments import parser
-from ppo_daac_idaac.model import PPOnet, IDAACnet, \
-    LinearOrderClassifier, NonlinearOrderClassifier
-from ppo_daac_idaac.storage import DAACRolloutStorage, \
-    IDAACRolloutStorage, RolloutStorage
+from ppo_daac_idaac.model import PPOnet, PPOImpalaNet, PPOImpalaNetMP
+from ppo_daac_idaac.storage import RolloutStorage
 from ppo_daac_idaac.envs import VecPyTorchProcgen
 
+from mmseg.models import build_segmentor
+from mmcv.runner import load_checkpoint
+import mmcv
+import tqdm, time
+import onnxruntime as onnxrt
+
+from torchvision import transforms as T
+
+torch.backends.cudnn.benchmark = True
+
+#config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x128LW.py'
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
+cfg = mmcv.Config.fromfile(config)
+
+def extract_obs_tensor(envs, mean, std, device):
+    info = envs.venv.venv.venv.env.get_info()
+    obs = np.stack([x['rgb'] for x in info])
+    _obs = torch.tensor(obs, dtype=torch.float32).permute(0,3,1,2).unsqueeze(0) #.to(device)
+    _obs = (_obs - mean) / std
+    return _obs
 
 def train(args):
     args.cuda = not args.no_cuda and torch.cuda.is_available()
@@ -51,15 +74,17 @@ def train(args):
                     args.experiment_name
                     )
 
-    #log_dir = os.path.expanduser(args.log_dir)
     utils.cleanup_log_dir(log_dir)
 
     torch.set_num_threads(1)
-    device = torch.device("cuda:0" if args.cuda else "cpu")
+    device = torch.device("cuda:1" if args.cuda else "cpu")
 
     log_file = '-{}-{}-s{}'.format(args.env_name, args.algo, args.seed)
     logger.configure(dir=log_dir, format_strs=['csv', 'stdout'], log_suffix=log_file)
     print("\nLog File: ", log_file)
+
+    mean = torch.tensor(cfg['img_norm_cfg']['mean'], dtype=torch.float32).reshape(3,1,1).unsqueeze(0).unsqueeze(0) #.to(device)
+    std = torch.tensor(cfg['img_norm_cfg']['std'], dtype=torch.float32).reshape(3,1,1).unsqueeze(0).unsqueeze(0) #.to(device)
 
     venv = ProcgenEnv(
             num_envs=args.num_processes, 
@@ -68,7 +93,8 @@ def train(args):
             start_level=args.start_level,
             distribution_mode=args.distribution_mode,
             stochasticity=args.stochasticity,
-            vision_mode=args.vision_mode
+            vision_mode=args.vision_mode,
+            render_mode='rgb_array'
     )
 
     venv = VecExtractDictObs(venv, "rgb")
@@ -76,74 +102,27 @@ def train(args):
     venv = VecNormalize(venv=venv, ob=False)
     envs = VecPyTorchProcgen(venv, device)
 
-    obs_shape = envs.observation_space.shape     
-    if args.algo == 'ppo':
-        actor_critic = PPOnet(
-            obs_shape,
-            envs.action_space.n,
-            base_kwargs={'hidden_size': args.hidden_size})    
-    else:           
-        actor_critic = IDAACnet(
-            obs_shape,
-            envs.action_space.n,
-            base_kwargs={'hidden_size': args.hidden_size})    
+    '''
+    if args.seg:
+        obs_shape = (16 + 3, 128, 128)
+    else:
+        obs_shape = envs.observation_space.shape     
+    '''
+    obs_shape = (16 + 3, 64, 64)
+
+    actor_critic = PPOnet(
+                obs_shape,
+                envs.action_space.n,
+                base_kwargs={'hidden_size': args.hidden_size}
+                )    
     actor_critic.to(device)
     print("\n Actor-Critic Network: ", actor_critic)
 
- 
-    if args.algo == 'idaac':
-        if args.use_nonlinear_clf:
-            order_classifier = NonlinearOrderClassifier(emb_size=args.hidden_size, \
-                hidden_size=args.clf_hidden_size).to(device)       
-        else:
-            order_classifier = LinearOrderClassifier(emb_size=args.hidden_size)
-        order_classifier.to(device)
-        print("\n Order Classifier: ", order_classifier)
-
-    if args.algo == 'idaac':
-        rollouts = IDAACRolloutStorage(args.num_steps, args.num_processes,
-                                envs.observation_space.shape, envs.action_space)
-    elif args.algo == 'daac':
-        rollouts = DAACRolloutStorage(args.num_steps, args.num_processes,
-                                envs.observation_space.shape, envs.action_space)
-    else:
-        rollouts = RolloutStorage(args.num_steps, args.num_processes,
-                                envs.observation_space.shape, envs.action_space)
+    rollouts = RolloutStorage(args.num_steps, args.num_processes,
+                                obs_shape, envs.action_space)
 
     batch_size = int(args.num_processes * args.num_steps / args.num_mini_batch)
-
-    if args.algo == 'idaac':
-        agent = algo.IDAAC(
-            actor_critic,
-            order_classifier,
-            args.clip_param,
-            args.ppo_epoch,
-            args.value_epoch, 
-            args.value_freq,
-            args.num_mini_batch,
-            args.value_loss_coef,
-            args.adv_loss_coef,
-            args.order_loss_coef, 
-            args.entropy_coef,
-            lr=args.lr,
-            eps=args.eps,
-            max_grad_norm=args.max_grad_norm)
-    elif args.algo == 'daac':
-        agent = algo.DAAC(
-            actor_critic,
-            args.clip_param,
-            args.ppo_epoch,
-            args.value_epoch, 
-            args.value_freq,
-            args.num_mini_batch,
-            args.value_loss_coef,
-            args.adv_loss_coef,
-            args.entropy_coef,
-            lr=args.lr,
-            eps=args.eps,
-            max_grad_norm=args.max_grad_norm)
-    else: 
-        agent = algo.PPO(
+    agent = algo.PPO(
             actor_critic,
             args.clip_param,
             args.ppo_epoch,
@@ -154,9 +133,24 @@ def train(args):
             eps=args.eps,
             max_grad_norm=args.max_grad_norm)
 
+    # LOAD THE ONNX RUNTIME
+    #onnx_session = onnxrt.InferenceSession("RFPN_MultiScale_b128_x128LW.onnx")
+    #onnx_session = onnxrt.InferenceSession("RFPN_MultiScale_b128_x128LW.onnx", providers=[('CUDAExecutionProvider', {'device_id': 1})])
+    onnx_session= onnxrt.InferenceSession("hGRU_b128_x128LW_LN.onnx", providers=['CUDAExecutionProvider'])
+
+    rzop = T.Resize((64,64))
 
     obs = envs.reset()
-    rollouts.obs[0].copy_(obs)
+    _obs = extract_obs_tensor(envs, mean, std, device)
+
+    with torch.no_grad():
+        onnx_op = onnx_session.run(None, {'img': _obs.numpy()})
+        imgarr = rzop(torch.tensor(onnx_op[0].squeeze()))
+
+    #_obs = torch.hstack([_obs.squeeze(), torch.tensor(onnx_op[0].squeeze()).to(device)])
+    _obs = torch.hstack([obs, imgarr.to(device)])
+
+    rollouts.obs[0].copy_(_obs)
     rollouts.to(device)
 
     episode_rewards = deque(maxlen=100)
@@ -165,22 +159,15 @@ def train(args):
 
     nsteps = torch.zeros(args.num_processes)
     for j in range(num_updates):
+        st = time.time()
         actor_critic.train()
-
-        for step in range(args.num_steps):
+ 
+        for step in tqdm.tqdm(range(args.num_steps)):
             # Sample actions
             with torch.no_grad():
-                if args.algo == 'ppo':
-                    value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
-                else:
-                    adv, value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
-                                        
-            obs, reward, done, infos = envs.step(action)
+                value, action, action_log_prob = actor_critic.act(rollouts.obs[step])
 
-            if args.algo == 'idaac':
-                levels = torch.LongTensor([info['level_seed'] for info in infos])
-                if j == 0 and step == 0:
-                    rollouts.levels[0].copy_(levels)
+            obs, reward, done, infos = envs.step(action)
 
             for info in infos:
                 if 'episode' in info.keys():
@@ -192,34 +179,33 @@ def train(args):
 
             nsteps += 1 
             nsteps[done == True] = 0
-            if args.algo == 'idaac':
-                rollouts.insert(obs, action, action_log_prob, value, \
-                                reward, masks, adv, levels, nsteps)
-            elif args.algo == 'daac':
-                rollouts.insert(obs, action, action_log_prob, value, \
-                                reward, masks, adv)
-            else:
-                rollouts.insert(obs, action, action_log_prob, value, \
+
+            _obs = extract_obs_tensor(envs, mean, std, device)
+            with torch.no_grad():
+                onnx_op = onnx_session.run(None, {'img': _obs.numpy()})
+                imgarr = rzop(torch.tensor(onnx_op[0].squeeze()))
+
+            #_obs = torch.hstack([_obs.squeeze(), torch.tensor(onnx_op[0].squeeze()).to(device)])
+            #_obs = torch.tensor(onnx_op[0].squeeze()).to(device)
+            _obs = torch.hstack([obs, imgarr.to(device)])
+   
+            # instead of obs!
+            rollouts.insert(_obs, action, action_log_prob, value, \
                                 reward, masks)
 
         with torch.no_grad():
             next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
         
         rollouts.compute_returns(next_value, args.gamma, args.gae_lambda)
-
-        if args.algo == 'idaac':
-            rollouts.before_update()
-            order_acc, order_loss, clf_loss, adv_loss, value_loss, \
-                action_loss, dist_entropy = agent.update(rollouts)    
-        elif args.algo == 'daac':
-            adv_loss, value_loss, action_loss, dist_entropy = agent.update(rollouts)    
-        else:
-            value_loss, action_loss, dist_entropy = agent.update(rollouts)    
+        value_loss, action_loss, dist_entropy = agent.update(rollouts)    
         rollouts.after_update()
+
+        ed = time.time()
+        print('Elapsed time: {}s'.format(ed - st))
 
         # Save Model
         #if j == num_updates - 1 and args.save_dir != "":
-        if (j%10 == 0) and args.save_dir != "":
+        if (j % 10 == 0)  and args.save_dir != "":
             save_dir = os.path.join(log_dir, args.save_dir)
             try:
                 os.makedirs(save_dir)
@@ -245,13 +231,14 @@ def train(args):
             logger.logkv("train/mean_episode_reward", np.mean(episode_rewards))
             logger.logkv("train/median_episode_reward", np.median(episode_rewards))
 
+            '''
             # Log eval stats (on the full distribution of levels) 
             eval_episode_rewards = evaluate(args, actor_critic, device)
             logger.logkv("test/mean_episode_reward", np.mean(eval_episode_rewards))
             logger.logkv("test/median_episode_reward", np.median(eval_episode_rewards))
+            '''
 
             logger.dumpkvs()
-
 
 if __name__ == "__main__":
     args = parser.parse_args()

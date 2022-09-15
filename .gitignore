@@ -119,3 +119,4 @@ train-procgen/train_procgen/results*/
 *.swp
 *.pt
 *.pth
+*.onnx

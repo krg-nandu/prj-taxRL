@@ -140,8 +140,8 @@ class ResNetBase(NNBase):
         self.flatten = Flatten()
         self.relu = nn.ReLU()
 
-        #self.fc = init_relu_(nn.Linear(2048, hidden_size))
-        self.fc = init_relu_(nn.Linear(8192, hidden_size))
+        self.fc = init_relu_(nn.Linear(2048, hidden_size))
+        #self.fc = init_relu_(nn.Linear(8192, hidden_size))
 
         self.critic_linear = init_(nn.Linear(hidden_size, 1))
 

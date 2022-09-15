@@ -29,8 +29,11 @@ checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness
 #config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_test_x128LW.py'
 #checkpoint = '/media/data_cifs_lrs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_trainbigfish10_128multiscaleboth_LW/iter_13000.pth' 
 
-config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
-checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_traingood7v1_128_hgru_LW_2nd/iter_11000.pth'
+#config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py' 
+#checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_traingood7v1_128_hgru_LW_2nd/iter_11000.pth'
+
+config = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/configs/config_hGRU_x128.py'
+checkpoint = '/media/data_cifs/projects/prj_rl/alekh/The-Emergence-of-Objectness-main/output_traingood7v1_128_hgru_LW_LN_2nd/iter_34000.pth'
 
 cfg = mmcv.Config.fromfile(config)
 
@@ -39,13 +42,13 @@ segModel = build_segmentor(cfg.model, train_cfg=None, test_cfg=cfg.test_cfg)
 checkpoint = load_checkpoint(segModel, checkpoint, map_location='cpu')
 segModel = segModel.eval()
 
-dummy_input = torch.randn(1, 32, 3, 128, 128)
+dummy_input = torch.randn(1, 128, 3, 128, 128)
 input_names = ["img"]
 output_names = ["all_pred_mask"]
 
 torch.onnx.export(segModel, 
                   dummy_input,
-                  'hGRU_b32_x128LW.onnx', #"RFPN_MultiScale_b32_x128LW.onnx",
+                  'hGRU_b128_x128LW_LN.onnx', #'RFPN_MultiScale_b128_x128LW.onnx', #'hGRU_b256_x128LW_LN.onnx', #"RFPN_MultiScale_b32_x128LW.onnx",
                   opset_version=11,
                   verbose=False,
                   input_names=input_names,

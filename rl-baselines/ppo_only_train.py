@@ -104,7 +104,9 @@ def train(args):
 
     obs_shape = (3, 128, 128)
     #obs_shape = envs.observation_space.shape     
- 
+    
+    import ipdb; ipdb.set_trace()
+
     actor_critic = PPOnet(
                 obs_shape,
                 envs.action_space.n,
@@ -167,7 +169,7 @@ def train(args):
 
         with torch.no_grad():
             next_value = actor_critic.get_value(rollouts.obs[-1]).detach()
-        
+
         rollouts.compute_returns(next_value, args.gamma, args.gae_lambda)
         value_loss, action_loss, dist_entropy = agent.update(rollouts)    
         rollouts.after_update()
