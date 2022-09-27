@@ -28,15 +28,21 @@ ENV_NAMES = [
     "ninja",
     "plunder",
     "starpilot",
+    "leaperH",
+    "mazeH",
+    "heistH"
 ]
 
 EXPLORATION_LEVEL_SEEDS = {
     "coinrun": 1949448038,
     "caveflyer": 1259048185,
     "leaper": 1318677581,
+    "leaperH": 1318677581,
     "jumper": 1434825276,
     "maze": 158988835,
+    "mazeH": 158988835,
     "heist": 876640971,
+    "heistH": 876640971,
     "climber": 1561126160,
     "ninja": 1123500215,
 }

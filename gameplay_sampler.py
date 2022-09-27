@@ -36,7 +36,7 @@ def sample_gameplay(env_name, save_dir, num_levels, num_episodes, distribution_m
     env = ProcgenGym3Env(
         num=1, env_name=env_name, render_mode="rgb_array",
         distribution_mode=distribution_mode, num_levels=num_levels,
-        vision_mode=vision_mode, stochasticity=1.
+        vision_mode=vision_mode, stochasticity=1., rand_seed=1331
     )
     env = VideoRecorderWrapper(env=env, directory=video_savedir, prefix=prefix, info_key="rgb")
 
@@ -70,7 +70,8 @@ def sample_gameplay(env_name, save_dir, num_levels, num_episodes, distribution_m
                     nsteps=nsteps, 
                     ent_coef=ent_coef, 
                     vf_coef=vf_coef, 
-                    max_grad_norm=max_grad_norm
+                    max_grad_norm=max_grad_norm,
+                    use_decoder=False
                     )
         model.load(model_path)
 

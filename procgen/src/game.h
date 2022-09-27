@@ -23,8 +23,8 @@ Base class used for all games, all games must inherit from this
 const int RES_W = 64;
 const int RES_H = 64;
 
-//const int RENDER_RES = 512;
-const int RENDER_RES = 128;
+const int RENDER_RES = 512;
+//const int RENDER_RES = 128;
 
 void bgr32_to_rgb888(void *dst_rgb888, void *src_bgr32, int w, int h);
 

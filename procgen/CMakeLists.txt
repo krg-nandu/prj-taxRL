@@ -70,6 +70,9 @@ add_library(env
   src/resources.cpp
   src/vecgame.cpp
   src/vecoptions.cpp
+  src/games/leaperH.cpp
+  src/games/mazeH.cpp
+  src/games/heistH.cpp
 )
 
 # find libenv.h header
